@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.env
+
+# Binary firmware and unpack dumps (避免佔用 Git 空間)
+*.exe
+*.bin
+*.dll
+unpacked/
+*.pcapng
