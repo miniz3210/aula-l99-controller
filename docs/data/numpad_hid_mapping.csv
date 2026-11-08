@@ -1,0 +1,18 @@
+order,label,hid_usage_id
+1,Num Lock,0x53
+2,NumPad Divide,0x54
+3,NumPad Multiply,0x55
+4,NumPad Minus,0x56
+5,NumPad 7,0x5F
+6,NumPad 8,0x60
+7,NumPad 9,0x61
+8,NumPad Plus,0x57
+9,NumPad 4,0x5C
+10,NumPad 5,0x5D
+11,NumPad 6,0x5E
+12,NumPad 1,0x59
+13,NumPad 2,0x5A
+14,NumPad 3,0x5B
+15,NumPad Enter,0x58
+16,NumPad 0,0x62
+17,NumPad Decimal,0x63

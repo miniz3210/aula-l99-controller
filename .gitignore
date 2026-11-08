@@ -1,0 +1,237 @@
+﻿# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+.venv-*/
+venv/
+env/
+
+# IDE and operating-system files
+.vscode/
+.idea/
+*.code-workspace
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporary and backup files
+*.tmp
+*.temp
+*.bak
+*.old
+*.swp
+*.swo
+~$*
+temp/
+tmp/
+
+# Logs
+*.log
+logs/
+
+# Downloaded third-party repositories and archives
+tools/Aula_L99_Linux-main/
+tools/evbunpack-main/
+tools/*.zip
+tools/*.7z
+tools/*.rar
+tools/*.tar
+tools/*.gz
+
+# Vendor applications and extracted proprietary files
+firmware/
+evbunpack_output/
+evbunpack_list_test/
+hfd_inner_list/
+hfd_inner_list.txt
+hfd_inner_*/
+isp_runtime_dump/
+*.exe
+*.dll
+*.sys
+*.msi
+*.cab
+
+# Firmware and binary images
+*.bin
+*.rom
+*.fw
+*.img
+*.hex
+
+# Memory and process dumps
+isp_memory_dumps/
+*.dmp
+*.dump
+*.mdmp
+
+# Packet captures
+*.pcap
+*.pcapng
+*.cap
+
+# Extracted packet and binary data
+extracted_packets/
+raw_payloads/
+payload_dumps/
+*.raw
+*.blob
+
+# Generated analysis output
+capture_analysis/
+analysis_output/
+generated/
+output/
+outputs/
+
+# Generated large text artifacts
+*_strings.txt
+*_strings_offsets.txt
+*_timeline.txt
+*_payloads.txt
+*_frames_*.txt
+*_context.txt
+touch_changes.txt
+realtime_usb_timeline.txt
+realtime_last_2_seconds.txt
+
+# Hardware-monitor and benchmark logs
+nvidia_gpu_*.csv
+cpu_load_test_*.txt
+gpu_load_test_*.txt
+
+# Local extraction output
+evbunpack_*/
+hfd_inner_*/
+
+# Local utilities
+procdump*.exe
+strings*.exe
+USBPcap*.exe
+tshark.exe
+
+# Local machine configuration and secrets
+config.local.json
+settings.local.json
+*.local.ini
+.env
+.env.*
+!.env.example
+
+# Generated hash inventories for excluded artifacts
+analysis_hashes.csv
+aula_capture_hashes.csv
+
+# Local GitHub preparation reports
+github_upload_inventory.csv
+github_large_files_audit.csv
+github_preparation_report.txt
+
+# Copied vendor application resources
+HardwareMonitor/
+qt-tool/
+device/
+font/
+gif/
+language/
+layouts/
+
+# Vendor libraries and configuration
+*.lib
+config.xml
+data.ini
+flashRwConfig.ini
+
+# Generated research text and payload material
+after_upload_device*.txt
+aula_chunk_analysis.txt
+aula_payload_hex.txt
+capture_batch_analysis.log
+crc_catalog_analysis.txt
+crc_delta_analysis.txt
+crc_validation.txt
+frame*_detail.txt
+generated_solid_stream.txt
+home_*_events.txt
+image_encoding_analysis.txt
+numpad_all_in.txt
+numpad_frames_*.txt
+numpad_short_hid_reports.txt
+official_upload_all_out.txt
+packet_crc_analysis.txt
+packet_headers.txt
+
+# Generated test images and local assets
+crc_test_images/
+
+# Local hardware and extraction data
+HardwareMonitor/
+qt-tool/
+
+# Generated payload files inside script folders
+scripts/*.txt
+scripts/__pycache__/
+.venv-evbunpack/
+*.pyc
+
+test_l99.py
+touch_candidate_analysis.txt
+touch_candidate_packets.txt
+usb1
+white_large_frames.txt
+white_short_command_analysis.txt
+
+# Copied vendor UI assets
+skins/
+
+# Local test images
+test.png
+
+# Generated solid-color analysis files
+solid_black_*.txt
+solid_white_*.txt
+
+# Local Python environment
+.venv-evbunpack/
+.venv-*/
+
+# Vendor and third-party content
+tools/
+firmware/
+evbunpack_output/
+evbunpack_list_test/
+HardwareMonitor/
+qt-tool/
+skins/
+device/
+font/
+gif/
+language/
+layouts/
+
+# Generated decoded images
+scripts/decoded_variants/
+scripts/crc_test_images/
+crc_test_images/
+
+# Generated analysis text
+*.txt
+!requirements.txt
+
+# Generated GitHub audit files
+github_upload_inventory.csv
+github_final_upload_inventory.csv
+github_large_files_audit.csv
+github_preparation_report.txt
+
+# Local test images and unidentified artifacts
+test.png
+usb1

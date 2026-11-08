@@ -1,0 +1,16 @@
+offset,length,field,status
+0,3,Header 00 01 5A,Verified
+3,1,Year minus 2000,Verified
+4,1,Month,Verified
+5,1,Day,Verified
+6,1,Hour,Verified
+7,1,Minute,Verified
+8,1,Second,Verified
+9,4,Unknown,Unresolved
+13,1,CPU usage percent,Verified by controlled CPU load
+14,1,CPU temperature Celsius,Probable but unavailable on test system
+15,1,GPU usage percent,Verified against nvidia-smi
+16,1,GPU temperature Celsius,Verified against nvidia-smi
+17,5,Weather or environmental fields,Unresolved
+22,40,Reserved or unused in observed packets,Observed as zero
+62,2,Trailer AA 55,Verified

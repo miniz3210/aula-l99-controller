@@ -1,0 +1,4 @@
+device,vid,pid,role,verified_interface
+Screen controller,0xEEEF,0x268A,CDC serial framebuffer and flash transport,COM port
+Keyboard controller,0x0C45,0x800A,Keyboard HID and 64-byte feature reports,Interface 3
+Touch and pointer controller,0x1A86,0x8091,Relative mouse and UI press-release reports,Endpoints 0x82 and 0x83
