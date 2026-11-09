@@ -235,3 +235,4 @@ github_preparation_report.txt
 # Local test images and unidentified artifacts
 test.png
 usb1
+.venv-analysis/
