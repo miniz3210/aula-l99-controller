@@ -1,0 +1,32 @@
+{
+  "vid": "0x0C45",
+  "pid": "0x800A",
+  "short_threshold_ms": 500,
+  "hold_threshold_ms": 700,
+  "secondary_hold_ms": 2000,
+  "secondary_hold_enabled": false,
+  "stuck_key_timeout_ms": 5000,
+  "provider": "dry_run",
+  "log_file": "bridge_events.jsonl",
+  "log_dir": "logs",
+  "key_mappings": {
+    "0x0030": "numpad_num",
+    "0x0031": "numpad_divide",
+    "0x0032": "numpad_multiply",
+    "0x0033": "numpad_minus",
+    "0x0034": "numpad_7",
+    "0x0035": "numpad_8",
+    "0x0036": "numpad_9",
+    "0x0037": "numpad_plus",
+    "0x0038": "numpad_4",
+    "0x0039": "numpad_5",
+    "0x003A": "numpad_6",
+    "0x003B": "numpad_1",
+    "0x003C": "numpad_2",
+    "0x003D": "numpad_3",
+    "0x003E": "numpad_enter",
+    "0x003F": "numpad_0",
+    "0x0040": "numpad_decimal_delete",
+    "0x0020": "home"
+  }
+}
