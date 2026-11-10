@@ -51,6 +51,9 @@ Local ignored artifacts:
 - HFD_Code_V2.3.bin (verified build): 313652 bytes, SHA-256 a76806ad...
 - HFD_ISP_TOOL_V1.31.exe, Flash.ini
 - Captures, dumps, decoded assets, virtual environments
+- docs/UI_IMAGE_CHECKSUM_MODEL.md — checksum model of UartTFT-II_Flash.bin (image-level checksum NOT_FOUND / UNKNOWN; structured scan added in scripts/flash_checksum_scanner.py)
+- docs/UI_ONLY_PACKAGE_CONSTRUCTION.md — UI-only vs combined package construction (STRONG_INFERENCE, not verified)
+- docs/PAGE21_FIRST_PATCH_PLAN.md — Page 21 descriptor 341/342 patch plan (equal-size in-place sufficient; image-level checksum blocker open)
 
 External third-party repositories (not vendored):
 - https://github.com/softce/aula-l99-research
@@ -201,39 +204,36 @@ established and a working-copy patch is validated.
 - Hardware writes are BLOCKED pending offline patch validation and recovery review.
 ## 12. Immediate next milestone
 
-Workstream A (offline descriptor and resource mapping) is COMPLETE. Descriptors 341/342 are resolved
-to source offsets, formats, dimensions, and allocations; patch feasibility is
-PROVEN_FOR_OFFLINE_WORKING_COPY.
+### 12a. Controlled flash plan — offline static analysis (COMPLETE)
 
-### 12a. Offline NumPad icon patcher (scripts/patch_l99_numpad_icon.py)
+Offline static analysis of the three updater candidates (`L99 ISP V1.23.exe`, `HFD_ISP_TOOL_V1.31.exe`,
+Screen Reset EXE) has been completed without executing any EXE or connecting hardware. Results are documented
+in `docs/CONTROLLED_FLASH_PLAN.md` and `docs/RECOVERY_COMPATIBILITY_MATRIX.md`.
 
-Added an offline-only ARGB4444 encoder and working-copy patcher for Page 21 NumPad 1
-descriptors 341 (normal) and 342 (pressed). Verified against the factory image:
+Key resolved findings:
+- C6 Updater acceptance: **VERIFIED** for both ISP tools (direct string ref `/UartTFT-II_Flash.bin`); STRONG_INFERENCE for Screen Reset EXE.
+- C7 Filename/path: **VERIFIED** (`UartTFT-II_Flash.bin`, root-relative alongside `Flash.ini`).
+- C8 Size: **VERIFIED** (127,599,044 bytes).
+- C11 CRC: **VERIFIED** (CRC32 reflected IEEE per-packet; FileCRC/FlashCRC strings).
+- C13 Transmission scope: **VERIFIED** (full 127,599,044-byte image transferred).
+- C9 UI-only vs combined HFD write: STRONG_INFERENCE (UI-only packages confirmed; combined possible).
+- C10 HFD V2.2/V2.3 selection: STRONG_INFERENCE (flash-ID `0xEFAA21` selector).
+- C14 Flash-ID/JEDEC: STRONG_INFERENCE (Flash.ini JEDEC→chip mapping).
+- C15 Hardware-ID: STRONG_INFERENCE ("Fail to Connect a 268x device"; Qt5SerialPort VID/PID imports).
+- C16 Image-level self-checksum: UNKNOWN (per-packet CRC verified; image-level self-checksum not located).
+- C17 Post-write read-back: STRONG_INFERENCE (status strings exist; arbitrary read-back not established).
+- C18 Recovery after interrupted write: UNKNOWN.
 
-- Factory UartTFT-II_Flash.bin: size 127599044, SHA-256
-  4cb3fa5c77eea973a2b62ca61873f071692694f4c9a1832507fe2c8c9ba582b4 — unchanged.
-- Descriptor 341: offset 0x0077C446, format 2 ARGB4444, 67x67, 8978 bytes,
-  allocation [7849030, 7858008], boundary verified.
-- Descriptor 342: offset 0x0077E758, format 2 ARGB4444, 67x67, 8978 bytes,
-  allocation [7858008, 7866986], boundary verified.
-- Round-trip validation: decoding and re-encoding both factory records is byte-for-byte equal.
-- No-visual-change round trip: patching with the decoded factory normal/pressed PNGs produces
-  a working copy byte-for-byte identical to the factory image (same SHA-256).
-- Test icon patch: exactly two asset ranges changed; Page 21 touch record 0x003B unchanged;
-  descriptors 341/342 still resolve to 67x67 ARGB4444 assets; factory size/hash/timestamp unchanged.
-- Synthetic tests: tests/test_patch_l99_numpad_icon.py (no vendor firmware embedded).
+**Decision: NO-GO.** No hardware write is permitted until all critical blockers are VERIFIED:
+1. Image-level self-checksum requirement.
+2. Write scope confirmed as VERIFIED.
+3. Recovery behavior after interrupted write determined.
 
-Next task (from the task evidence): Review recovery and package compatibility, then prepare a
-controlled flash plan. Do not implement flashing in this task.
+Next task: Resolve remaining critical blockers offline (image-level self-checksum, write scope, interrupted-write recovery). Do not execute any EXE or connect hardware.
 
-Workstream B — Win32 overlapped uploader:
-- Implement scripts/replay_captured_screen_win32.py.
-- Complete 2060-byte writes.
-- No USB driver replacement.
-- Preserve a stable pyserial fallback.
+### 12b. Offline NumPad icon patcher (scripts/patch_l99_numpad_icon.py)
 
-Workstream A MUST be completed before any modified firmware write. Workstream B MAY be developed
-using the existing known-safe photo upload path.
+Already complete; see prior sections for details.
 
 ## 13. Acceptance criteria
 
@@ -293,3 +293,102 @@ Get-FileHash tools/softce-aula-l99-research/extracted/HFD_Code_V2.2.bin -Algorit
 Get-FileHash tools/softce-aula-l99-research/extracted/HFD_Code_V2.3.bin -Algorithm SHA256
 
 cd "C:\temp\aula-l99-controller"
+
+## 16. Checksum scanner operation and performance
+
+`scripts/flash_checksum_scanner.py` is the offline, read-only image-level
+self-checksum scanner for `UartTFT-II_Flash.bin`. It never modifies its input.
+
+### Why the original deep scan took approximately 30 to 40 minutes
+
+The previous implementation ran a whole-image CRC16/MODBUS and CRC32/standard
+over the full 127,599,044-byte image for every candidate field offset inside
+each region, recomputing whole-region checksums repeatedly in Python. It was
+effectively single-threaded: it used one logical processor on the AMD Ryzen 9
+5900HX (8 cores / 16 logical processors), so roughly one CPU was doing all the
+work. Combined with repeated full-image copies, that produced the 30-40 minute
+runtime.
+
+### Quick versus deep mode
+
+- `--mode quick`: targeted structural checks only. Verifies source hashes,
+  known structural regions, changed-range containment, known headers/tables/
+  trailers, and descriptor 341/342 areas. No exploratory whole-image candidate
+  scanning. Target runtime under 30 seconds on the current image (measured
+  ~2.3 seconds on the 127,599,044-byte factory image). Whole-image checks use
+  fast/native algorithms (zlib CRC32, additive sums) to stay within budget.
+- `--mode deep`: full structural investigation over all fixed-structure
+  regions using all algorithms. Results are cached so identical inputs return
+  immediately.
+
+### Cache-key fields
+
+The deep-mode cache key is a SHA-256 over:
+- factory SHA-256,
+- patched SHA-256,
+- scanner version (`SCANNER_VERSION`),
+- scanner source SHA-256,
+- algorithm list,
+- region-map SHA-256.
+
+Any change to these inputs invalidates the cache and forces a re-run.
+
+### Native CRC, multiprocessing, mmap/memoryview requirements
+
+- Native C-backed CRC32 via `zlib.crc32` where mathematically equivalent and
+  verified against golden vectors (`123456789 -> 0xCBF43926`).
+- Lookup-table CRC16/MODBUS and CRC32/standard implementations.
+- Regions are parallelised across worker processes with
+  `ProcessPoolExecutor` (never `ThreadPoolExecutor` for CPU-bound work).
+- Default worker count: `min(8, physical CPU cores)` (Ryzen 9 5900HX has 8
+  cores; Python uses one logical processor unless multiprocessed).
+- Each image is read once; workers read only their assigned byte range from
+  disk so the full image is never pickled across process boundaries.
+- Each algorithm is calculated once per structural region; calculated values
+  are compared only against structurally plausible field offsets (no
+  birthday-paradox "value appears anywhere" scanning).
+- No GPU support.
+
+### Quick-mode target under 30 seconds
+
+Quick mode must complete well under 30 seconds on the current image so it can
+be used for normal validation and release checks.
+
+### Deep scan should run only when source or scanner inputs change
+
+Deep mode re-runs only when the cache key changes (factory hash, patched hash,
+scanner version, scanner source hash, algorithm list, or region map). A valid
+cache hit returns instantly.
+
+### Current image-checksum classification is UNKNOWN
+
+The structured scan over all fixed-structure regions found no stored field at
+any plausible offset matching any tested algorithm. Classification: UNKNOWN.
+Lack of a match is not proof of absence.
+
+### False-positive CRC16 matches are not evidence
+
+CRC16 matches found in large regions were statistical collisions, not
+checksum evidence. Birthday-paradox matches are deliberately not reported.
+
+### Current decision remains NO-GO
+
+No hardware write is permitted until all critical blockers (image-level
+self-checksum, write scope, interrupted-write recovery) are VERIFIED.
+
+### Exact resume commands
+
+Quick mode:
+```
+cd "C:\temp\aula-l99-controller"
+python scripts/flash_checksum_scanner.py tools/softce-aula-l99-research/extracted/UartTFT-II_Flash.bin --factory tools/softce-aula-l99-research/extracted/UartTFT-II_Flash.bin --mode quick
+```
+
+Cached deep mode (runs only if source/scanner inputs changed; cache hit returns immediately):
+```
+cd "C:\temp\aula-l99-controller"
+python scripts/flash_checksum_scanner.py tools/softce-aula-l99-research/extracted/UartTFT-II_Flash.bin --factory tools/softce-aula-l99-research/extracted/UartTFT-II_Flash.bin --patched <patched_image.bin> --mode deep
+```
+
+Prints phase name, progress, elapsed time, full-image pass count, worker count,
+and cache hit/miss. A configurable `--max-runtime` guard stops deep mode cleanly.

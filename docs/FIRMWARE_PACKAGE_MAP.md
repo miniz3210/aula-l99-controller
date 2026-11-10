@@ -36,10 +36,18 @@ graph TD
 - **Version Ambiguity**: HFD V2.3 files with identical names but different hashes have been identified. The version contained in the reset package is the verified latest reference.
 - **ISP Tools**: `L99 ISP V1.23.exe` and `HFD_ISP_TOOL_V1.31.exe` are distinct tools; their roles should not be conflated with the MCU firmware itself.
 
+## UI-Only Package Construction
+
+See `docs/UI_ONLY_PACKAGE_CONSTRUCTION.md` for the full offline static-analysis record.
+
+Summary: UI-only packages are confirmed to exist per softce (`HFD_ISP_TOOL_V1.31.exe` + `UartTFT-II_Flash.bin`, optionally `Flash.ini`, no HFD_Code files), but the exact accepted package construction is **NOT verified** (STRONG_INFERENCE only). Both ISP tools statically reference all three files (`UartTFT-II_Flash.bin`, `HFD_Code_V2.2.bin`, `HFD_Code_V2.3.bin`, `Flash.ini`), so a combined UI+HFD write remains possible. Exact filename/path `UartTFT-II_Flash.bin` and size 127,599,044 bytes are VERIFIED.
+
 ## Unresolved Questions
 
 - Functional differences between the two HFD V2.3 builds remain unproven without deep disassembly.
 - The precise mechanism of the official ISP tools in verifying flash after write is known, but raw read-back capability is not established.
+- Exact UI-only package construction is not verified (see `docs/UI_ONLY_PACKAGE_CONSTRUCTION.md`).
+- Image-level self-checksum within `UartTFT-II_Flash.bin` is not located (see `docs/UI_IMAGE_CHECKSUM_MODEL.md`).
 
 ## Safest Next Step
 
