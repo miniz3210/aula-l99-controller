@@ -8,10 +8,18 @@
 - Verified Page 21 NumPad 1 descriptor mapping via factory validation.
 - Recorded descriptor 341/342 findings (offsets, format, dimensions, encoded length, allocation, hashes, references, verified boundaries).
 - Recorded patch feasibility as PROVEN_FOR_OFFLINE_WORKING_COPY (offline working copy only; metadata/checksum implications Unknown).
+- Added offline-only ARGB4444 encoder and working-copy patcher `scripts/patch_l99_numpad_icon.py` for NumPad 1 descriptors 341/342:
+  - Requires exact factory size (127599044) and SHA-256.
+  - Writes a separate patched working copy; never modifies the factory image.
+  - Byte-for-byte round-trip check on factory descriptors 341/342 before patching.
+  - Writes only the two verified ranges (0x0077C446..0x0077E757 and 0x0077E758..0x00780A69).
+  - Preserves all other bytes; never touches touch records or descriptor-table entries.
+  - Generates patched image, patch_report.json, diff_ranges.json, normal/pressed encoded binaries and round-trip PNGs.
+- Added synthetic tests `tests/test_patch_l99_numpad_icon.py` covering ARGB4444 golden vectors, factory round-trip, wrong dimensions, malformed PNG, wrong encoded length, input/output collision, exact two-range patch, all other bytes unchanged, deterministic output, source image unchanged, and factory hash rejection (no vendor firmware required or embedded).
 
 ### Changed
-- Updated docs/PROJECT_HANDOVER.md: added descriptor 341/342 mapping section and marked Workstream A complete.
-- Updated README.md: added read-only descriptor inspector tooling section.
+- Updated docs/PROJECT_HANDOVER.md: added descriptor 341/342 mapping section, offline patcher section, and marked Workstream A complete with next milestone pointing to recovery/package compatibility review.
+- Updated README.md: added offline NumPad icon patcher tooling section.
 - Updated .gitignore: added local_analysis/.
 
 ### Verified

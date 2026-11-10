@@ -199,15 +199,32 @@ established and a working-copy patch is validated.
 - NO firmware update during extraction or inspection.
 - NO claim of universal brick recovery.
 - Hardware writes are BLOCKED pending offline patch validation and recovery review.
-
 ## 12. Immediate next milestone
 
 Workstream A (offline descriptor and resource mapping) is COMPLETE. Descriptors 341/342 are resolved
 to source offsets, formats, dimensions, and allocations; patch feasibility is
 PROVEN_FOR_OFFLINE_WORKING_COPY.
 
-Next task (from the task evidence, option A): Build an offline-only image encoder and working-copy
-patcher for descriptors 341 and 342. Patch a working copy only; never modify the factory image.
+### 12a. Offline NumPad icon patcher (scripts/patch_l99_numpad_icon.py)
+
+Added an offline-only ARGB4444 encoder and working-copy patcher for Page 21 NumPad 1
+descriptors 341 (normal) and 342 (pressed). Verified against the factory image:
+
+- Factory UartTFT-II_Flash.bin: size 127599044, SHA-256
+  4cb3fa5c77eea973a2b62ca61873f071692694f4c9a1832507fe2c8c9ba582b4 — unchanged.
+- Descriptor 341: offset 0x0077C446, format 2 ARGB4444, 67x67, 8978 bytes,
+  allocation [7849030, 7858008], boundary verified.
+- Descriptor 342: offset 0x0077E758, format 2 ARGB4444, 67x67, 8978 bytes,
+  allocation [7858008, 7866986], boundary verified.
+- Round-trip validation: decoding and re-encoding both factory records is byte-for-byte equal.
+- No-visual-change round trip: patching with the decoded factory normal/pressed PNGs produces
+  a working copy byte-for-byte identical to the factory image (same SHA-256).
+- Test icon patch: exactly two asset ranges changed; Page 21 touch record 0x003B unchanged;
+  descriptors 341/342 still resolve to 67x67 ARGB4444 assets; factory size/hash/timestamp unchanged.
+- Synthetic tests: tests/test_patch_l99_numpad_icon.py (no vendor firmware embedded).
+
+Next task (from the task evidence): Review recovery and package compatibility, then prepare a
+controlled flash plan. Do not implement flashing in this task.
 
 Workstream B — Win32 overlapped uploader:
 - Implement scripts/replay_captured_screen_win32.py.
@@ -215,7 +232,8 @@ Workstream B — Win32 overlapped uploader:
 - No USB driver replacement.
 - Preserve a stable pyserial fallback.
 
-Workstream A MUST be completed before any modified firmware write. Workstream B MAY be developed using the existing known-safe photo upload path.
+Workstream A MUST be completed before any modified firmware write. Workstream B MAY be developed
+using the existing known-safe photo upload path.
 
 ## 13. Acceptance criteria
 

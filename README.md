@@ -11,6 +11,8 @@ This is an active reverse-engineering and prototyping project. The present miles
 - Factory UI parsed successfully.
 - Page 21 confirmed as the built-in Mini Numpad.
 - All 17 touch zones, return codes, rectangles, and normal/pressed icon descriptor pairs mapped.
+- Offline-only ARGB4444 encoder and working-copy patcher added for NumPad 1 descriptors 341/342
+  (scripts/patch_l99_numpad_icon.py). Factory image is never modified.
 - No modified resource image has been flashed.
 - Current hardware-write status remains blocked pending offline patch validation and recovery review.
 
@@ -196,6 +198,27 @@ Direct descriptor mode:
         --output <empty-output-directory>
 
 See `tests/test_inspect_l99_descriptor.py` for synthetic-test coverage (no vendor firmware embedded).
+
+## Tooling: offline NumPad icon patcher
+
+`scripts/patch_l99_numpad_icon.py` is an offline-only ARGB4444 encoder and working-copy
+patcher for the Page 21 NumPad 1 icons (descriptors 341 normal, 342 pressed). It:
+
+- Requires exact factory size (127599044) and SHA-256
+  (4cb3fa5c77eea973a2b62ca61873f071692694f4c9a1832507fe2c8c9ba582b4).
+- Never modifies the factory image; writes a separate patched working copy.
+- Encodes two 67x67 RGBA PNGs (`--normal`, `--pressed`) as the verified ARGB4444 record.
+- Performs a byte-for-byte round-trip check on factory descriptors 341/342 before patching.
+- Writes only the two verified ranges:
+  - 0x0077C446 .. 0x0077E757 (descriptor 341, unpressed)
+  - 0x0077E758 .. 0x00780A69 (descriptor 342, pressed)
+- Preserves all other bytes exactly and never touches touch records or descriptor-table entries.
+- Never opens USB, COM, HID, or any updater.
+- Generates: patched image, patch_report.json, diff_ranges.json,
+  normal_encoded.bin, pressed_encoded.bin, normal_roundtrip.png, pressed_roundtrip.png.
+
+See `tests/test_patch_l99_numpad_icon.py` for synthetic-test coverage (no vendor firmware
+required or embedded).
 
 ## Repository contents
 
