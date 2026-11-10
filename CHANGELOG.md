@@ -3,6 +3,8 @@
 ## Unreleased
 
 ### Added
+- Created `docs/FIRMWARE_PACKAGE_MAP.md` clarifying package relationships and component identities.
+- Verified and compared two HFD_Code_V2.3.bin builds.
 - Consolidated project documentation: README.md, docs/PROJECT_HANDOVER.md, CHANGELOG.md.
 - Documented verified factory UI inspection counts and Page 21 Mini Numpad 17-zone map.
 - Documented verified screen upload protocol: 154 chunks, 150 x 2060-byte packets, four short commands.
@@ -16,6 +18,7 @@
 - Removed unproven claims about firmware safety and universal recovery.
 
 ### Fixed
+- Corrected project terminology regarding firmware component relationships based on static analysis.
 - Corrected protocol history: 115200 CDC line-coding is not the observed USB transfer throughput limit.
 - Corrected upload timing: official upload is ~1.2 seconds, not 30 to 40 seconds.
 

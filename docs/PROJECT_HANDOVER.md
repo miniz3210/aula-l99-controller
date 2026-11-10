@@ -11,7 +11,7 @@ Turn the AULA L99 keyboard's built-in 320x480 touchscreen into a Stream Deck-sty
 - Main repository path: C:\temp\aula-l99-controller
 - Branch: main
 - Remote: miniz3210/aula-l99-controller.git
-- Current published release: v0.1.0
+- Current published release: v0.1.1
 - HEAD commit: 516e3c82cdbe6c95c10ef8a92d3d7764013192d9
 - Local ignored research directory: tools/softce-aula-l99-research
 - Vendor binaries and extracted artifacts are local only and ignored by Git.
@@ -41,14 +41,14 @@ Keyboard events and screen runtime updates use different paths.
 Public repository files:
 - README.md, CHANGELOG.md, VERSION, .gitignore, LICENSE
 - scripts/ analysis and replay tools
-- docs/ handover, protocol notes, third-party references, and data CSVs
+- docs/ handover, protocol notes, firmware package map, third-party references, and data CSVs
 
 Local ignored artifacts:
 - tools/softce-aula-l99-research/ (softce research checkout)
 - Official reset ZIP (45080624 bytes, SHA-256 e854bebb...)
 - UartTFT-II_Flash.bin (127599044 bytes, SHA-256 4cb3fa5c...)
 - HFD_Code_V2.2.bin (305800 bytes, SHA-256 432e358c...)
-- HFD_Code_V2.3.bin (313652 bytes, SHA-256 a76806ad...)
+- HFD_Code_V2.3.bin (verified build): 313652 bytes, SHA-256 a76806ad...
 - HFD_ISP_TOOL_V1.31.exe, Flash.ini
 - Captures, dumps, decoded assets, virtual environments
 
@@ -62,7 +62,6 @@ Same-named firmware files may contain different builds and must be identified by
 ## 5. Verified screen upload protocol
 
 - Official captured photo upload contains 154 logical chunks.
-- 150 chunks are 2060-byte data packets.
 - Four are short control or commit commands.
 - Total captured stream is approximately 309071 bytes.
 - The screen acknowledges packet transfers.
