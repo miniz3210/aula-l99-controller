@@ -244,6 +244,18 @@ Next task: Resolve remaining critical blockers offline (image-level self-checksu
 
 Already complete; see prior sections for details.
 
+### 12c. Official update capture toolkit (ADDED in v0.6.0)
+
+Capture preparation only — no updater execution, no hardware access, no flashing.
+Decision remains NO-GO.
+
+- `docs/OFFICIAL_UPDATE_CAPTURE_PLAN.md` — capture procedure answering ten questions static analysis cannot verify (files opened, HFD V2.2/V2.3 read, UartTFT-II_Flash.bin read, file/USB order, UI vs HFD payloads, bytes per payload, re-enumeration/ISP entry, FileCRC/FlashCRC, success/restart).
+- `scripts/prepare_official_capture.ps1` — verifies official file hashes, absence of patched_UartTFT-II_Flash.bin, no updater running, no tracked vendor/capture files over 5 MB.
+- `scripts/analyse_official_capture.py` — offline analyser for exported Procmon CSV + USBPcap/Wireshark PCAPNG; marks every finding EVIDENCE or INFERENCE; never opens COM/USB, never executes an updater.
+- `tests/test_analyse_official_capture.py` — synthetic analyser tests (no vendor firmware, no hardware).
+
+Validation: PowerShell syntax check, py_compile, `python -m unittest discover -s tests`, `git diff --check`, no vendor/capture/generated files tracked, no staged file over 5 MB.
+
 ## 13. Acceptance criteria
 
 Offline patcher:

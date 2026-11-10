@@ -155,3 +155,35 @@ No hardware write is permitted until all critical blockers are VERIFIED.
 ## 10. Exact Next Task
 
 Resolve remaining critical blockers offline: (1) determine whether `UartTFT-II_Flash.bin` contains an image-level self-checksum beyond per-packet CRC; (2) confirm write scope (UI-only vs combined HFD_Code rewrite) as VERIFIED — including exact UI-only package construction; (3) determine recovery behavior after interrupted write as VERIFIED or explicitly accept residual brick risk. Continue offline static analysis only — do not execute any EXE or connect hardware.
+
+## 11. Official update capture preparation (ADDED in v0.6.0)
+
+Capture preparation only. No updater execution, no hardware access, no flashing.
+Decision remains NO-GO.
+
+- `docs/OFFICIAL_UPDATE_CAPTURE_PLAN.md` — passive capture procedure for one unchanged official screen update. Answers ten questions static analysis cannot verify:
+  1. Files the updater opens.
+  2. Whether HFD_Code_V2.2.bin or V2.3.bin is read.
+  3. Whether UartTFT-II_Flash.bin is read independently.
+  4. Exact file-open and read order.
+  5. Exact USB command and transfer order.
+  6. Whether UI and HFD payloads are both transmitted.
+  7. Total bytes transferred per payload.
+  8. Re-enumeration and ISP-entry behavior.
+  9. FileCRC and FlashCRC behavior.
+  10. Final success and restart sequence.
+- `scripts/prepare_official_capture.ps1` — verifies official file hashes, absence of patched_UartTFT-II_Flash.bin, no updater running, no tracked vendor/capture files over 5 MB.
+- `scripts/analyse_official_capture.py` — offline analyser for exported Procmon CSV + PCAPNG; EVIDENCE/INFERENCE classification; no COM/USB access, no updater execution.
+- `tests/test_analyse_official_capture.py` — synthetic analyser tests.
+
+Capture constraints (from the plan):
+- Use only untouched official files with verified hashes.
+- Never use patched_UartTFT-II_Flash.bin.
+- Never rename or replace vendor payloads.
+- Direct motherboard USB, wired mode, stable power.
+- Close AULA software and all custom COM/HID scripts.
+- Capture Procmon file activity + entire USB controller via USBPcap/Wireshark + screen recording.
+- Start all captures before opening the updater; continue 30 seconds after success/restart.
+- After erase/write begins: prohibit unplugging, sleep, process termination, or capture interruption.
+
+This capture does not change the NO-GO decision. It is observation only.

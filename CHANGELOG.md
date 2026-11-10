@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.6.0 - 2026-11-10
+
+### Added
+- Added `docs/OFFICIAL_UPDATE_CAPTURE_PLAN.md` — passive capture procedure for one unchanged official AULA L99 screen update. Answers ten questions static analysis cannot verify: files opened, HFD V2.2/V2.3 read, UartTFT-II_Flash.bin read independently, exact file-open and read order, exact USB command and transfer order, UI vs HFD payload transmission, total bytes per payload, re-enumeration/ISP entry, FileCRC/FlashCRC behavior, final success and restart sequence.
+- Added `scripts/prepare_official_capture.ps1` — verifies official file hashes, absence of `patched_UartTFT-II_Flash.bin`, no updater running, no tracked vendor/capture files over 5 MB. Capture preparation only; never runs the updater, never accesses hardware, never flashes.
+- Added `scripts/analyse_official_capture.py` — offline analyser for exported Procmon CSV + USBPcap/Wireshark PCAPNG. Inventories opened firmware files and read order, calculates bytes read per file, identifies HFD V2.2/V2.3/UI access, reports USB transfer sizes/sequence/timing, distinguishes EVIDENCE from INFERENCE. Never opens COM/USB/HID, never executes an updater.
+- Added `tests/test_analyse_official_capture.py` — synthetic analyser tests (no vendor firmware, no hardware, no COM/USB access).
+
+### Changed
+- Release bumped to v0.6.0 (was v0.5.0).
+- Decision remains NO-GO for modified firmware.
+
+### Verified
+- PowerShell syntax check passes on `scripts/prepare_official_capture.ps1`.
+- `py_compile` passes on all scripts and tests.
+- All repo tests pass (`python -m unittest discover -s tests`).
+- `git diff --check` passes.
+- No vendor/capture/generated files tracked.
+- No staged file over 5 MB.
+- Factory `UartTFT-II_Flash.bin` unchanged (SHA-256 `4cb3fa5c...`).
+- NO-GO requirements not weakened.
+
 ## v0.5.0 - 2026-11-10
 
 ### Added

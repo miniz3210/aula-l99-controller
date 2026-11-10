@@ -344,3 +344,15 @@ Until all critical blockers are VERIFIED, **no hardware write is permitted.**
 ## 20. Exact Next Task
 
 Resolve remaining critical blockers offline: (1) determine whether `UartTFT-II_Flash.bin` contains an image-level self-checksum beyond per-packet CRC; (2) confirm write scope (UI-only vs combined HFD_Code rewrite) as VERIFIED or explicitly accept combined write — including exact UI-only package construction; (3) determine recovery behavior after interrupted write as VERIFIED or explicitly accept residual brick risk. Continue offline static analysis only — do not execute any EXE or connect hardware.
+
+## 21. Official update capture preparation (ADDED in v0.6.0)
+
+Capture preparation only. No updater execution, no hardware access, no flashing.
+Decision remains NO-GO.
+
+- `docs/OFFICIAL_UPDATE_CAPTURE_PLAN.md` — passive capture procedure for one unchanged official screen update.
+- `scripts/prepare_official_capture.ps1` — verifies official file hashes, absence of patched_UartTFT-II_Flash.bin, no updater running, no tracked vendor/capture files over 5 MB.
+- `scripts/analyse_official_capture.py` — offline analyser for exported Procmon CSV + PCAPNG; EVIDENCE/INFERENCE classification; no COM/USB access, no updater execution.
+- `tests/test_analyse_official_capture.py` — synthetic analyser tests.
+
+This capture kit prepares observation only. It does not resolve any critical blocker by itself; the captured evidence must be reviewed against the unresolved blockers (image-level self-checksum, write scope, interrupted-write recovery) before any GO decision.
