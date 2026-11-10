@@ -244,14 +244,21 @@ Next task: Resolve remaining critical blockers offline (image-level self-checksu
 
 Already complete; see prior sections for details.
 
-### 12c. Official update capture toolkit (ADDED in v0.6.0)
+### 12c. Official update capture toolkit (ADDED in v0.6.0; corrected to L99 ISP V1.23.exe in v0.6.1)
 
 Capture preparation only — no updater execution, no hardware access, no flashing.
 Decision remains NO-GO.
 
-- `docs/OFFICIAL_UPDATE_CAPTURE_PLAN.md` — capture procedure answering ten questions static analysis cannot verify (files opened, HFD V2.2/V2.3 read, UartTFT-II_Flash.bin read, file/USB order, UI vs HFD payloads, bytes per payload, re-enumeration/ISP entry, FileCRC/FlashCRC, success/restart).
-- `scripts/prepare_official_capture.ps1` — verifies official file hashes, absence of patched_UartTFT-II_Flash.bin, no updater running, no tracked vendor/capture files over 5 MB.
-- `scripts/analyse_official_capture.py` — offline analyser for exported Procmon CSV + USBPcap/Wireshark PCAPNG; marks every finding EVIDENCE or INFERENCE; never opens COM/USB, never executes an updater.
+The only approved capture target is the original untouched L99 ISP V1.23.exe package
+(`firmware\unpacked\L99 ISP V1.23.exe`, 111,008 bytes,
+SHA-256 `e849917779505ce97c8bd8cb9323b223f613337524f94b9aaaa9cc617e743ef0`).
+
+Excluded targets: Screen Reset EXE from L99-reset.zip, patched_UartTFT-II_Flash.bin,
+renamed/replaced vendor payloads, and new UI-only package construction.
+
+- `docs/OFFICIAL_UPDATE_CAPTURE_PLAN.md` — capture procedure answering ten questions static analysis cannot verify (files opened, HFD V2.2/V2.3 read, UartTFT-II_Flash.bin read, file/USB order, UI vs HFD payloads, bytes per payload, re-enumeration/ISP entry, FileCRC/FlashCRC, success/restart). Records the L99 ISP V1.23.exe package path, filename, size and SHA-256, inventories every file beside the EXE, rejects excluded targets, generates Procmon filters for the real EXE and expected child processes, and instructs how to identify the USB controller for EEEF:268A.
+- `scripts/prepare_official_capture.ps1` — preflight-only command (`-Preflight`) that performs no hardware access, launches no EXE, verifies package hashes, verifies Procmon/Wireshark/USBPcap availability, verifies free disk space, creates an empty timestamped capture directory, prints READY or NOT READY.
+- `scripts/analyse_official_capture.py` — offline analyser for exported Procmon CSV + USBPcap/Wireshark PCAPNG; marks every finding EVIDENCE or INFERENCE; never opens COM/USB, never executes an updater; detects process/child-process names without launching; generates Procmon filters.
 - `tests/test_analyse_official_capture.py` — synthetic analyser tests (no vendor firmware, no hardware).
 
 Validation: PowerShell syntax check, py_compile, `python -m unittest discover -s tests`, `git diff --check`, no vendor/capture/generated files tracked, no staged file over 5 MB.

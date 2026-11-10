@@ -345,13 +345,20 @@ Until all critical blockers are VERIFIED, **no hardware write is permitted.**
 
 Resolve remaining critical blockers offline: (1) determine whether `UartTFT-II_Flash.bin` contains an image-level self-checksum beyond per-packet CRC; (2) confirm write scope (UI-only vs combined HFD_Code rewrite) as VERIFIED or explicitly accept combined write — including exact UI-only package construction; (3) determine recovery behavior after interrupted write as VERIFIED or explicitly accept residual brick risk. Continue offline static analysis only — do not execute any EXE or connect hardware.
 
-## 21. Official update capture preparation (ADDED in v0.6.0)
+## 21. Official update capture preparation (ADDED in v0.6.0; corrected in v0.6.1)
 
 Capture preparation only. No updater execution, no hardware access, no flashing.
 Decision remains NO-GO.
 
-- `docs/OFFICIAL_UPDATE_CAPTURE_PLAN.md` — passive capture procedure for one unchanged official screen update.
-- `scripts/prepare_official_capture.ps1` — verifies official file hashes, absence of patched_UartTFT-II_Flash.bin, no updater running, no tracked vendor/capture files over 5 MB.
+The only approved capture target is the original untouched L99 ISP V1.23.exe package
+(`firmware\unpacked\L99 ISP V1.23.exe`, 111,008 bytes,
+SHA-256 `e849917779505ce97c8bd8cb9323b223f613337524f94b9aaaa9cc617e743ef0`).
+
+Excluded targets: Screen Reset EXE from L99-reset.zip, patched_UartTFT-II_Flash.bin,
+renamed/replaced vendor payloads, and new UI-only package construction.
+
+- `docs/OFFICIAL_UPDATE_CAPTURE_PLAN.md` — passive capture procedure for one unchanged official L99 ISP V1.23.exe screen update.
+- `scripts/prepare_official_capture.ps1` — preflight-only verification (package hashes, Procmon/Wireshark/USBPcap, disk space, timestamped capture directory, READY/NOT READY).
 - `scripts/analyse_official_capture.py` — offline analyser for exported Procmon CSV + PCAPNG; EVIDENCE/INFERENCE classification; no COM/USB access, no updater execution.
 - `tests/test_analyse_official_capture.py` — synthetic analyser tests.
 

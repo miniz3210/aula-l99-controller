@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Offline analyser for an official AULA L99 screen-update capture.
+"""Offline analyser for an official L99 ISP V1.23.exe screen-update capture.
 
 Inputs (never hardware, never an updater):
   - Exported Procmon CSV (file activity)
   - USBPcap/Wireshark PCAPNG (USB controller capture)
 
 Outputs:
-  - JSON report answering the ten capture questions
+  - JSON report answering the capture questions
+  - Procmon filters for the real EXE and expected child processes
   - Marks every finding as EVIDENCE (directly observed) or INFERENCE (reasoned)
 
 Constraints:
@@ -14,6 +15,7 @@ Constraints:
   - Never opens COM/USB or HID.
   - Never executes an updater.
   - Distinguishes evidence from inference.
+  - Tests use synthetic fixtures only.
 """
 
 import argparse
@@ -28,13 +30,19 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
-# Expected official firmware files (hashes verified by prepare script)
+# Approved capture target: original untouched L99 ISP V1.23.exe package
+# Package root: firmware\unpacked\ (alongside L99 ISP V1.23.exe)
 # ---------------------------------------------------------------------------
 EXPECTED_FILES = {
-    "UartTFT-II_Flash.bin": {
-        "size": 127599044,
-        "sha256": "4cb3fa5c77eea973a2b62ca61873f071692694f4c9a1832507fe2c8c9ba582b4",
-        "role": "UI/resource image",
+    "L99 ISP V1.23.exe": {
+        "size": 111008,
+        "sha256": "e849917779505ce97c8bd8cb9323b223f613337524f94b9aaaa9cc617e743ef0",
+        "role": "Screen ISP updater (capture target)",
+    },
+    "Flash.ini": {
+        "size": 1571,
+        "sha256": "e515905c61a6ad99bf96eaac3e24e5cfd21e274c087f9903b14f35ecece21e2c",
+        "role": "ISP tool config (JEDEC -> chip mapping)",
     },
     "HFD_Code_V2.2.bin": {
         "size": 305800,
@@ -42,27 +50,67 @@ EXPECTED_FILES = {
         "role": "Screen MCU code V2.2",
     },
     "HFD_Code_V2.3.bin": {
-        "size": 313652,
-        "sha256": "a76806ada9648d2672bbebead8a9bb396c0bc6f3a0a071e22e99001ac3359d03",
-        "role": "Screen MCU code V2.3 (official)",
+        "size": 313504,
+        "sha256": "b277823234fcab7137963896493bcb6896fd985fc972354166fcfc584534e37f",
+        "role": "Screen MCU code V2.3 (earlier build bundled in package)",
     },
-    "Flash.ini": {
-        "size": 1571,
-        "sha256": "e515905c61a6ad99bf96eaac3e24e5cfd21e274c087f9903b14f35ecece21e2c",
-        "role": "ISP config",
+    "HFD_ISP_TOOL_V1.31.exe": {
+        "size": 99328,
+        "sha256": "3fd0227368539e4b80a385ea721a1f091d6f22997da24451e2f8248d512ca282",
+        "role": "Alternate ISP tool bundled in package",
+    },
+    "UartTFT-II_Flash.bin": {
+        "size": 127599044,
+        "sha256": "4cb3fa5c77eea973a2b62ca61873f071692694f4c9a1832507fe2c8c9ba582b4",
+        "role": "Factory UI/resource image read by updater (/UartTFT-II_Flash.bin)",
     },
 }
 
-FORBIDDEN_FILES = {"patched_uarttft-ii_flash.bin"}
+# Runtime DLLs beside the EXE (informational)
+RUNTIME_DLLS = {
+    "Qt5Core.dll": "2af418a34f2076b05ee08dc4bedbe6eb7050bcb6b0658a3db2d5d4302af2db45",
+    "Qt5Gui.dll": "6431689ae70b04224017f0ca8d1ace0102ac03ca5d11aa7cdb1108c6d5ab95a8",
+    "Qt5SerialPort.dll": "333df93739e8afefecb4e4c56b91d22350869aa24d3ba44c66d310cea0de86",
+    "Qt5Svg.dll": "60bb2aa9d37684ed43a2c5ad8781c0d9af656e1ce1e867ea3a17752970803d87",
+    "Qt5Widgets.dll": "fa3d2383ebe612f83da59207119ea7aac8306a9f165457f7b9d97b875c584",
+    "libEGL.dll": "d3628f75921b9145e85442f0c77aba7e568bb6b7bd2479ad9c253654b6a6b677",
+    "libGLESv2.dll": "1d31fe6b741850f00a4b93bb21591008826f72b10063f0cf933610230524456d",
+    "opengl32sw.dll": "25ae7577e066fa80519a8f1c314b15cdd22e4a8d3ecd2a36eeccc79e40714a91d",
+    "D3Dcompiler_47.dll": "efbdbbcd0d954f8fdc53467de5d89ad525e4e4a9cfff8a15d07c6fdb350c407f",
+    "libgcc_s_dw2-1.dll": "aa8180b63a849e755323bb1abe364b654c0eed9b433738fc491e5b64c410ef76",
+    "libstdc++-6.dll": "c05b714b94bab75ddfb77339aa5f48772be7ac2c3e9d7322e2d1549fc0a39cfd",
+    "libwinpthread-1.dll": "ae1b4fe65da58196fea59b4dc0be64ae68d6ef04497027fadbddbc2dc38d843d",
+}
+
+FORBIDDEN_FILES = {
+    "patched_uarttft-ii_flash.bin",
+    "l99 keyboard screen reset firmware",
+    "screen reset exe",
+    "l99-reset.zip",
+    "l99 reset firmware 2026.5.25.zip",
+}
+
+CAPTURE_TARGET_EXE = "L99 ISP V1.23.exe"
+CAPTURE_TARGET_EXE_BASENAME = os.path.splitext(CAPTURE_TARGET_EXE)[0].lower()
+
+# Expected child processes are discovered offline (never launched). These are the
+# process names the real EXE may spawn; they are reported from capture artefacts.
+EXPECTED_CHILD_PROCESSES = []
 
 FIRMWARE_BASENAMES = {
     "uarttft-ii_flash.bin": "UartTFT-II_Flash.bin",
     "hfd_code_v2.2.bin": "HFD_Code_V2.2.bin",
     "hfd_code_v2.3.bin": "HFD_Code_V2.3.bin",
     "flash.ini": "Flash.ini",
+    "hfd_isp_tool_v1.31.exe": "HFD_ISP_TOOL_V1.31.exe",
+    "l99 isp v1.23.exe": CAPTURE_TARGET_EXE,
 }
 
 USB_VID_PID = ("0xEEEF", "0x268A")
+
+PACKAGE_SUBDIRS = {
+    "iconengines", "imageformats", "platforms", "styles", "translations"
+}
 
 
 # ---------------------------------------------------------------------------
@@ -84,9 +132,11 @@ def parse_procmon_csv(path):
 
     Returns dict: {basename: [events]} where each event has timestamp,
     process, operation, path, result, detail.
+    Also returns all processes and parent/child relationships observed.
     """
     events_by_file = defaultdict(list)
     all_events = []
+    processes = defaultdict(set)  # process -> set of child processes seen
     with open(path, "r", encoding="utf-8", errors="replace", newline="") as f:
         reader = csv.DictReader(f)
         for row in reader:
@@ -98,6 +148,8 @@ def parse_procmon_csv(path):
                 "QueryOpen",
                 "QueryStandardInformationFile",
                 "CloseFile",
+                "Process Create",
+                "Process Start",
             }:
                 continue
             path_val = (row.get("Path") or "").strip()
@@ -118,16 +170,67 @@ def parse_procmon_csv(path):
             all_events.append(event)
             if basename in FIRMWARE_BASENAMES or basename in FORBIDDEN_FILES:
                 events_by_file[basename].append(event)
-    return events_by_file, all_events
+            # Track process names for child-process detection (offline, from CSV)
+            if proc:
+                processes[proc].add(basename)
+    return events_by_file, all_events, dict(processes)
 
 
-def analyse_procmon(events_by_file, all_events):
+def detect_child_processes(all_events, processes):
+    """Detect process and child-process names from Procmon CSV without launching.
+
+    Returns the capture-target process, any child processes, and process tree
+    hints inferred from Process Create / Process Start events.
+    """
+    target_proc_events = [e for e in all_events
+                          if e["process"].lower() == CAPTURE_TARGET_EXE_BASENAME
+                          or CAPTURE_TARGET_EXE_BASENAME in e["process"].lower()]
+    child_procs = set()
+    parent_child = []
+    for e in all_events:
+        op = e["operation"]
+        if op in ("Process Create", "Process Start"):
+            detail = e["detail"]
+            parent = e["process"]
+            # Detail often contains the created command line / image path
+            created = os.path.basename(detail) if detail else ""
+            if created and created.lower().endswith(".exe"):
+                child_procs.add(created)
+                parent_child.append({
+                    "parent": parent,
+                    "child": created,
+                    "timestamp": e["timestamp"],
+                    "classification": evidence(
+                        f"Process Create observed: {parent} -> {created}"
+                    ),
+                })
+    # Also infer child processes from processes that open files beside the EXE
+    for proc in processes:
+        if proc.lower() != CAPTURE_TARGET_EXE_BASENAME and proc:
+            child_procs.add(proc)
+    return {
+        "capture_target": CAPTURE_TARGET_EXE,
+        "capture_target_processes_observed": sorted(
+            {e["process"] for e in target_proc_events if e["process"]}
+        ),
+        "child_processes": sorted(child_procs),
+        "expected_child_processes": EXPECTED_CHILD_PROCESSES,
+        "parent_child": parent_child,
+        "classification": evidence(
+            "Process and child-process names detected from Procmon CSV; "
+            "no EXE launched"
+        ),
+    }
+
+
+def analyse_procmon(events_by_file, all_events, processes):
     opened = []
     read_order = []
     bytes_read_per_file = defaultdict(int)
     hfd_access = {"V2.2": [], "V2.3": []}
     ui_access = []
     forbidden_seen = []
+    dll_access = []
     for basename, events in events_by_file.items():
         canon = FIRMWARE_BASENAMES.get(basename, basename)
         creates = [e for e in events if e["operation"] == "CreateFile"]
@@ -166,6 +269,8 @@ def analyse_procmon(events_by_file, all_events):
             hfd_access["V2.3"] = reads
         elif basename == "uarttft-ii_flash.bin":
             ui_access = reads
+        elif basename in RUNTIME_DLLS:
+            dll_access.extend(reads)
         if basename in FORBIDDEN_FILES:
             forbidden_seen.append({
                 "file": canon,
@@ -181,8 +286,54 @@ def analyse_procmon(events_by_file, all_events):
         "hfd_v22_access": len(hfd_access["V2.2"]),
         "hfd_v23_access": len(hfd_access["V2.3"]),
         "ui_access_count": len(ui_access),
+        "dll_access_count": len(dll_access),
         "forbidden_access": forbidden_seen,
         "classification": evidence("File activity directly observed from Procmon CSV"),
+    }
+
+
+def generate_procmon_filters(process_info):
+    """Generate Procmon filters for the real EXE and expected child processes."""
+    target = process_info["capture_target"]
+    children = process_info["child_processes"]
+    expected = process_info["expected_child_processes"]
+    all_procs = [target] + children + expected
+    # Deduplicate preserving order
+    seen = set()
+    proc_list = []
+    for p in all_procs:
+        if p and p not in seen:
+            seen.add(p)
+            proc_list.append(p)
+    filters = [
+        {"field": "Process Name", "operator": "is", "value": target,
+         "include": True},
+    ]
+    for p in proc_list[1:]:
+        filters.append({
+            "field": "Process Name", "operator": "is", "value": p, "include": True,
+        })
+    filters += [
+        {"field": "Operation", "operator": "is", "value": "CreateFile", "include": True},
+        {"field": "Operation", "operator": "is", "value": "ReadFile", "include": True},
+        {"field": "Operation", "operator": "is", "value": "WriteFile", "include": True},
+        {"field": "Operation", "operator": "is", "value": "QueryOpen", "include": True},
+        {"field": "Operation", "operator": "is",
+         "value": "QueryStandardInformationFile", "include": True},
+        {"field": "Operation", "operator": "is", "value": "CloseFile", "include": True},
+        {"field": "Path", "operator": "contains", "value": "firmware\\unpacked\\",
+         "include": True},
+        {"field": "Path", "operator": "contains", "value": "UartTFT-II_Flash.bin",
+         "include": True},
+    ]
+    return {
+        "processes": proc_list,
+        "capture_target": target,
+        "filters": filters,
+        "classification": evidence(
+            "Procmon filters generated for L99 ISP V1.23.exe and detected child "
+            "processes; no EXE launched"
+        ),
     }
 
 
@@ -208,8 +359,6 @@ def read_pcapng_blocks(path):
             block_length = struct.unpack("<I", hdr[4:8])[0]
             if block_length < 12:
                 break
-            # block_length covers type+length+body+trailer(4). Body excludes
-            # the 8-byte header we already read, so body_len = block_length - 12.
             body_len = block_length - 12
             body = f.read(body_len)
             if len(body) < body_len:
@@ -222,19 +371,11 @@ def read_pcapng_blocks(path):
 
 
 def parse_pcapng_usb(path):
-    """Parse PCAPNG for USB packets.
-
-    Returns list of packet dicts with index, timestamp, length, endpoint,
-    direction, data (hex), interface id.
-    Best-effort: handles Section Header, Interface Description, Enhanced Packet
-    blocks; USB capture specifics (interface type, encapsulation) are noted.
-    """
     blocks = read_pcapng_blocks(path)
     packets = []
     interfaces = {}
     for idx, b in enumerate(blocks):
         if b.block_type == 0x0A0A0A0B:  # Interface Description
-            # parse interface info best-effort
             ift = struct.unpack("<H", b.data[0:2])[0] if len(b.data) >= 2 else None
             interfaces[idx] = {"link_type": ift}
         elif b.block_type == 0x0A0A0A0D:  # Enhanced Packet Block
@@ -262,16 +403,6 @@ def parse_pcapng_usb(path):
 
 
 def classify_usb_direction(data):
-    """Best-effort USB direction from raw packet bytes.
-
-    Returns ('OUT'|'IN'|'CONTROL'|'UNKNOWN', classification).
-    Real USBPcap encapsulates URBs; without parsing the encapsulation header
-    the direction field is not directly available, so this is a heuristic
-    and is marked INFERENCE.
-
-    Heuristic: packets beginning with a known host-to-device command frame
-    (0x4A 0x30) are host-to-device (OUT). Everything else is UNKNOWN.
-    """
     if len(data) < 2:
         return "UNKNOWN", inference("Too few bytes to determine USB direction")
     if data[0:2] == b"\x4A\x30":
@@ -322,11 +453,7 @@ def analyse_usb(packets):
     }
 
 
-# ---------------------------------------------------------------------------
-# USB command/transfer structure detection (4A 30 frames etc.)
-# ---------------------------------------------------------------------------
 def detect_command_frames(transfers_out):
-    """Detect 4A 30 | offset:LE32 | len:LE16 | payload | CRC32:LE16 frames."""
     frames = []
     for t in transfers_out:
         data = bytes.fromhex(t["data_hex_prefix"]) if t["data_hex_prefix"] else b""
@@ -345,13 +472,8 @@ def detect_command_frames(transfers_out):
     return frames
 
 
-# ---------------------------------------------------------------------------
-# Re-enumeration / ISP entry detection
-# ---------------------------------------------------------------------------
 def detect_reenumeration(packets, usb_analysis):
     events = []
-    # Device disconnect/reconnect evidenced by bursts of control transfers
-    # or gaps in transfer stream; marked inference without explicit descriptors.
     if usb_analysis["disconnects"]:
         for d in usb_analysis["disconnects"]:
             events.append({
@@ -368,9 +490,6 @@ def detect_reenumeration(packets, usb_analysis):
     }
 
 
-# ---------------------------------------------------------------------------
-# CRC / FileCRC / FlashCRC behaviour
-# ---------------------------------------------------------------------------
 def detect_crc_behaviour(transfers_out):
     crc_frames = []
     for t in transfers_out:
@@ -394,26 +513,116 @@ def detect_crc_behaviour(transfers_out):
 
 
 # ---------------------------------------------------------------------------
+# Manifest verification
+# ---------------------------------------------------------------------------
+def verify_manifest(package_root, expected_files=None):
+    """Verify hashes of all package files against expected_files (offline).
+
+    expected_files defaults to module EXPECTED_FILES. Tests may pass a
+    synthetic manifest so fixtures need not match real vendor hashes.
+    Returns a manifest report dict. Does not launch any EXE.
+    """
+    if expected_files is None:
+        expected_files = EXPECTED_FILES
+    report = {"files": {}, "missing": [], "mismatches": [], "forbidden": [], "all_verified": True}
+    package_path = Path(package_root)
+    for name, entry in expected_files.items():
+        candidate = package_path / name if not entry.get("External") else None
+        found = False
+        if candidate and candidate.exists():
+            actual_sha = hashlib_sha256(candidate)
+            size = candidate.stat().st_size
+            ok = actual_sha == entry["sha256"] and size == entry["size"]
+            report["files"][name] = {
+                "path": str(candidate),
+                "size": size,
+                "sha256": actual_sha,
+                "expected_sha256": entry["sha256"],
+                "expected_size": entry["size"],
+                "verified": ok,
+                "role": entry["role"],
+            }
+            found = True
+            if not ok:
+                report["mismatches"].append(name)
+                report["all_verified"] = False
+        else:
+            # Check external locations for UartTFT-II_Flash.bin
+            if entry.get("External"):
+                for ext in [
+                    Path.home() / "Desktop" / name,
+                    Path.home() / "Downloads" / name,
+                    Path(package_root).parent / "vendor" / name,
+                ]:
+                    if ext.exists():
+                        actual_sha = hashlib_sha256(ext)
+                        size = ext.stat().st_size
+                        ok = actual_sha == entry["sha256"] and size == entry["size"]
+                        report["files"][name] = {
+                            "path": str(ext),
+                            "size": size,
+                            "sha256": actual_sha,
+                            "expected_sha256": entry["sha256"],
+                            "expected_size": entry["size"],
+                            "verified": ok,
+                            "role": entry["role"],
+                        }
+                        found = True
+                        if not ok:
+                            report["mismatches"].append(name)
+                            report["all_verified"] = False
+                        break
+            if not found:
+                report["missing"].append(name)
+                report["all_verified"] = False
+    return report
+
+
+def hashlib_sha256(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+# ---------------------------------------------------------------------------
 # Main report assembly
 # ---------------------------------------------------------------------------
-def build_report(procmon_csv, pcapng, output_json=None):
+def build_report(procmon_csv, pcapng, package_root, output_json=None, expected_files=None):
+    import hashlib  # noqa: F401  (used by verify_manifest)
+
     report = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "offline": True,
         "hardware_accessed": False,
         "updater_executed": False,
+        "capture_target": CAPTURE_TARGET_EXE,
         "inputs": {
             "procmon_csv": str(procmon_csv),
             "pcapng": str(pcapng),
+            "package_root": str(package_root),
         },
         "questions": {},
         "summary": {},
     }
 
+    # Manifest verification (offline)
+    manifest_report = verify_manifest(package_root, expected_files=expected_files)
+    report["manifest"] = manifest_report
+
     # Procmon analysis
-    events_by_file, all_events = parse_procmon_csv(procmon_csv)
-    file_analysis = analyse_procmon(events_by_file, all_events)
+    events_by_file, all_events, processes = parse_procmon_csv(procmon_csv)
+    file_analysis = analyse_procmon(events_by_file, all_events, processes)
     report["file_activity"] = file_analysis
+
+    # Process / child-process detection (offline, no launch)
+    process_info = detect_child_processes(all_events, processes)
+    report["processes"] = process_info
+
+    # Procmon filters for real EXE + expected child processes
+    proc_filters = generate_procmon_filters(process_info)
+    report["procmon_filters"] = proc_filters
 
     # USB analysis
     packets = parse_pcapng_usb(pcapng)
@@ -426,7 +635,7 @@ def build_report(procmon_csv, pcapng, output_json=None):
     report["reenumeration"] = reenum
     report["crc_behaviour"] = crc_behaviour
 
-    # Answers to the ten questions
+    # Answers to the capture questions
     opened = file_analysis["files_opened"]
     files_opened = [f["file"] for f in opened]
     report["questions"]["1_files_opened"] = {
@@ -510,13 +719,19 @@ def build_report(procmon_csv, pcapng, output_json=None):
 
     # Summary
     report["summary"] = {
+        "capture_target": CAPTURE_TARGET_EXE,
         "files_opened_count": len(opened),
         "hfd_v22_read": file_analysis["hfd_v22_access"] > 0,
         "hfd_v23_read": file_analysis["hfd_v23_access"] > 0,
         "uarttft_read": file_analysis["ui_access_count"] > 0,
+        "dll_access_count": file_analysis["dll_access_count"],
         "total_usb_out_bytes": usb_analysis["total_out_bytes"],
         "command_frame_count": len(command_frames),
         "forbidden_file_accessed": len(file_analysis["forbidden_access"]) > 0,
+        "manifest_all_verified": manifest_report["all_verified"],
+        "manifest_missing": manifest_report["missing"],
+        "manifest_mismatches": manifest_report["mismatches"],
+        "child_processes": process_info["child_processes"],
         "offline_analyser": True,
     }
 
@@ -528,6 +743,12 @@ def build_report(procmon_csv, pcapng, output_json=None):
 
 def print_summary(report):
     print("=== Official Update Capture Analysis (offline) ===")
+    print(f"Capture target: {report['capture_target']}")
+    print(f"Manifest all verified: {report['summary']['manifest_all_verified']}")
+    if report["summary"]["manifest_missing"]:
+        print(f"  Missing: {report['summary']['manifest_missing']}")
+    if report["summary"]["manifest_mismatches"]:
+        print(f"  Mismatches: {report['summary']['manifest_mismatches']}")
     q = report["questions"]
     print(f"1. Files opened: {q['1_files_opened']['answer']}")
     print(f"2. HFD V2.2 reads: {q['2_hfd_v22_or_v23_read']['answer']['V2.2_reads']}")
@@ -543,14 +764,17 @@ def print_summary(report):
     print(f"8. Re-enumeration events: {len(q['8_reenumeration_isp_entry']['answer']['reenumeration_events'])}")
     print(f"9. CRC frames: {q['9_filecrc_flashcrc']['answer']['crc_frame_count']}")
     print(f"10. USB packets total: {q['10_final_success_restart']['answer']['usb_transfer_count']}")
+    print(f"Child processes: {report['summary']['child_processes']}")
+    print(f"Procmon filter processes: {report['procmon_filters']['processes']}")
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(
-        description="Offline analyser for official AULA L99 screen-update capture"
+        description="Offline analyser for official L99 ISP V1.23.exe screen-update capture"
     )
     parser.add_argument("--procmon-csv", required=True, help="Exported Procmon CSV")
     parser.add_argument("--pcapng", required=True, help="USBPcap/Wireshark PCAPNG")
+    parser.add_argument("--package-root", required=True, help="L99 ISP V1.23.exe package root")
     parser.add_argument("--output-json", help="Write JSON report to this path")
     args = parser.parse_args(argv)
 
@@ -560,8 +784,11 @@ def main(argv=None):
     if not os.path.exists(args.pcapng):
         print(f"ERROR: PCAPNG not found: {args.pcapng}", file=sys.stderr)
         return 2
+    if not os.path.isdir(args.package_root):
+        print(f"ERROR: Package root not found: {args.package_root}", file=sys.stderr)
+        return 2
 
-    report = build_report(args.procmon_csv, args.pcapng, args.output_json)
+    report = build_report(args.procmon_csv, args.pcapng, args.package_root, args.output_json)
     print_summary(report)
     if args.output_json:
         print(f"Report written to {args.output_json}")

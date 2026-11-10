@@ -1,5 +1,34 @@
 # Changelog
 
+## v0.6.1 - 2026-11-10
+
+### Corrected
+- Corrected the official-update capture toolkit so the only approved capture target is the original untouched L99 ISP V1.23.exe package (`firmware\unpacked\L99 ISP V1.23.exe`, 111,008 bytes, SHA-256 `e849917779505ce97c8bd8cb9323b223f613337524f94b9aaaa9cc617e743ef0`), previously used successfully twice on this keyboard.
+- Do NOT capture or execute the 2026-05-25 Screen Reset EXE from L99-reset.zip.
+- L99-reset.zip remains offline extraction and recovery-reference material only.
+- Do NOT use patched_UartTFT-II_Flash.bin.
+- Do NOT construct a new UI-only package.
+
+### Added
+- `docs/OFFICIAL_UPDATE_CAPTURE_PLAN.md` now records the L99 ISP V1.23.exe package path, filename, size and SHA-256; inventories every file beside the EXE (core package files, runtime DLLs, subdirectories, external UartTFT-II_Flash.bin reference); explicitly rejects the Screen Reset EXE, patched UI images, renamed/replaced vendor payloads, and missing expected package files; generates Procmon filters for the real EXE and expected child processes; provides USB controller (EEEF:268A) identification instructions; scopes capture questions to what L99 ISP V1.23.exe actually reads, extracts and transmits; states this capture does not verify the reset-package updater or modified UI acceptance.
+- `scripts/prepare_official_capture.ps1` `-Preflight` command: performs no hardware access, launches no EXE, verifies package hashes, verifies Procmon/Wireshark/USBPcap availability, verifies adequate free disk space, creates an empty timestamped capture directory, prints READY or NOT READY.
+- `scripts/analyse_official_capture.py` updated: manifest keyed to L99 ISP V1.23.exe package (including HFD_Code_V2.3.bin earlier build 313,504 bytes `b2778232...`), detects process and child-process names without launching, generates Procmon filters for the real EXE and expected child processes.
+- `tests/test_analyse_official_capture.py` updated: synthetic package-root fixtures, manifest verification (pass/missing/mismatch), child-process detection, Procmon filter generation.
+
+### Changed
+- Release bumped to v0.6.1 (was v0.6.0).
+- Decision remains NO-GO for modified firmware.
+- docs/PROJECT_HANDOVER.md, docs/CONTROLLED_FLASH_PLAN.md, docs/RECOVERY_COMPATIBILITY_MATRIX.md updated to reflect L99 ISP V1.23.exe as sole capture target and excluded targets.
+
+### Verified
+- PowerShell syntax check passes on `scripts/prepare_official_capture.ps1`.
+- `py_compile` passes on all scripts and tests.
+- All repo tests pass (`python -m unittest discover -s tests`).
+- `git diff --check` passes.
+- No vendor/capture/generated files tracked.
+- No staged file over 5 MB.
+- NO-GO requirements not weakened.
+
 ## v0.6.0 - 2026-11-10
 
 ### Added

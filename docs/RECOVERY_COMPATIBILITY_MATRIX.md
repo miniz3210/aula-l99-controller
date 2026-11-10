@@ -156,23 +156,20 @@ No hardware write is permitted until all critical blockers are VERIFIED.
 
 Resolve remaining critical blockers offline: (1) determine whether `UartTFT-II_Flash.bin` contains an image-level self-checksum beyond per-packet CRC; (2) confirm write scope (UI-only vs combined HFD_Code rewrite) as VERIFIED — including exact UI-only package construction; (3) determine recovery behavior after interrupted write as VERIFIED or explicitly accept residual brick risk. Continue offline static analysis only — do not execute any EXE or connect hardware.
 
-## 11. Official update capture preparation (ADDED in v0.6.0)
+## 11. Official update capture preparation (ADDED in v0.6.0; corrected in v0.6.1)
 
 Capture preparation only. No updater execution, no hardware access, no flashing.
 Decision remains NO-GO.
 
-- `docs/OFFICIAL_UPDATE_CAPTURE_PLAN.md` — passive capture procedure for one unchanged official screen update. Answers ten questions static analysis cannot verify:
-  1. Files the updater opens.
-  2. Whether HFD_Code_V2.2.bin or V2.3.bin is read.
-  3. Whether UartTFT-II_Flash.bin is read independently.
-  4. Exact file-open and read order.
-  5. Exact USB command and transfer order.
-  6. Whether UI and HFD payloads are both transmitted.
-  7. Total bytes transferred per payload.
-  8. Re-enumeration and ISP-entry behavior.
-  9. FileCRC and FlashCRC behavior.
-  10. Final success and restart sequence.
-- `scripts/prepare_official_capture.ps1` — verifies official file hashes, absence of patched_UartTFT-II_Flash.bin, no updater running, no tracked vendor/capture files over 5 MB.
+The only approved capture target is the original untouched L99 ISP V1.23.exe package
+(`firmware\unpacked\L99 ISP V1.23.exe`, 111,008 bytes,
+SHA-256 `e849917779505ce97c8bd8cb9323b223f613337524f94b9aaaa9cc617e743ef0`).
+
+Excluded targets: Screen Reset EXE from L99-reset.zip, patched_UartTFT-II_Flash.bin,
+renamed/replaced vendor payloads, and new UI-only package construction.
+
+- `docs/OFFICIAL_UPDATE_CAPTURE_PLAN.md` — passive capture procedure for one unchanged official L99 ISP V1.23.exe screen update. Answers ten questions static analysis cannot verify.
+- `scripts/prepare_official_capture.ps1` — preflight-only verification (package hashes, Procmon/Wireshark/USBPcap, disk space, timestamped capture directory, READY/NOT READY).
 - `scripts/analyse_official_capture.py` — offline analyser for exported Procmon CSV + PCAPNG; EVIDENCE/INFERENCE classification; no COM/USB access, no updater execution.
 - `tests/test_analyse_official_capture.py` — synthetic analyser tests.
 
