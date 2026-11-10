@@ -116,6 +116,58 @@ Home/back: return value 0x0020, goto page 1. NumPad actions: goto_page 65535. De
 
 The 17 buttons use 34 normal/pressed icon descriptors.
 
+### 8a. Descriptor 341 / 342 mapping (verified via scripts/inspect_l99_descriptor.py)
+
+Descriptor 341 (0x0155) — NumPad 1 unpressed:
+- Icon table bank: 0
+- Descriptor table base / file offset: 6433412 (0x00623114)
+- Exact descriptor entry file offset: 6437504 (0x00623A80)
+- Raw descriptor bytes: 46c477004300430012230002
+- Descriptor entry length: 12
+- Source asset logical address / file offset: 7849030 (0x0077C446) — direct file offset, no translation
+- Encoded format number: 2 — ARGB4444 (raw 16-bit packed)
+- Decoded dimensions: 67 x 67
+- Encoded payload length: 8978 bytes
+- Full encoded record length (incl. header): 8990 bytes
+- Encoded range: [7849030, 7858008] (0x0077C446 .. 0x0077E758)
+- Allocation: start 7849030, end 7858008, capacity 8978
+- Next confirmed asset boundary: 7858008 — VERIFIED (next descriptor address == end)
+- Boundary confidence: verified
+- Decoded asset: inspection\assets\0077C446_67x67_f2.png
+- Decoded PNG SHA-256: daddc6dc21c58d2bbd1597024113afb2b38472d14baa239af59f8fae29c0e99b
+- Source encoded-byte SHA-256: 785416bcad1789248b62dfc085f477806547d5c01f747dde150f9555a2c70317
+- Referencing records: 1 — page 21 touch record offset 150697, role unpressed, return 0x003B, goto_page 65535
+- Shared by other pages/controls: No
+- Manifest decode issues: 0
+
+Descriptor 342 (0x0156) — NumPad 1 pressed:
+- Icon table bank: 0
+- Descriptor table base / file offset: 6433412 (0x00623114)
+- Exact descriptor entry file offset: 6437516 (0x00623A8C)
+- Raw descriptor bytes: 58e777004300430012230002
+- Descriptor entry length: 12
+- Source asset logical address / file offset: 7858008 (0x0077E758) — direct file offset, no translation
+- Encoded format number: 2 — ARGB4444 (raw 16-bit packed)
+- Decoded dimensions: 67 x 67
+- Encoded payload length: 8978 bytes
+- Full encoded record length (incl. header): 8990 bytes
+- Encoded range: [7858008, 7866986] (0x0077E758 .. 0x00780A6A)
+- Allocation: start 7858008, end 7866986, capacity 8978
+- Next confirmed asset boundary: 7866986 — VERIFIED (next descriptor address == end)
+- Boundary confidence: verified
+- Decoded asset: inspection\assets\0077E758_67x67_f2.png
+- Decoded PNG SHA-256: aef08b1f04064c2a651b9db115d019c33425d8716fe3cc2a8ec6216d36c43750
+- Source encoded-byte SHA-256: 4265cf743061b87fb85479bc64df1d05d241b1aaf88ea51392f01e2781332474
+- Referencing records: 1 — page 21 touch record offset 150697, role pressed, return 0x003B, goto_page 65535
+- Shared by other pages/controls: No
+- Manifest decode issues: 0
+
+Patch feasibility: PROVEN_FOR_OFFLINE_WORKING_COPY (exact encoded range, exact verified allocation
+boundary, established format, confirmed dimensions, single known reference, replacement-size limit =
+allocation capacity 8978, no overlap with adjacent asset). Metadata/checksum implications remain
+Unknown (not covered by manifest). In-place replacement is not declared safe unless all of these are
+established and a working-copy patch is validated.
+
 ## 9. Version ambiguity
 
 - Device About page displays AULA L99 V1.31.
@@ -150,12 +202,12 @@ The 17 buttons use 34 normal/pressed icon descriptors.
 
 ## 12. Immediate next milestone
 
-Two workstreams:
+Workstream A (offline descriptor and resource mapping) is COMPLETE. Descriptors 341/342 are resolved
+to source offsets, formats, dimensions, and allocations; patch feasibility is
+PROVEN_FOR_OFFLINE_WORKING_COPY.
 
-Workstream A — Offline descriptor and resource mapping:
-- Descriptor 341/342 resolution to source offsets, formats, dimensions, and allocations.
-- One NumPad 1 icon experiment.
-- No hardware writes.
+Next task (from the task evidence, option A): Build an offline-only image encoder and working-copy
+patcher for descriptors 341 and 342. Patch a working copy only; never modify the factory image.
 
 Workstream B — Win32 overlapped uploader:
 - Implement scripts/replay_captured_screen_win32.py.

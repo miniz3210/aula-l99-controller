@@ -166,6 +166,37 @@ Next transport milestone:
 - It does not include verified per-device OOB, ECC, bad-block, calibration, or unique-board data.
 - About-page V1.31 is an unresolved whole-device display version and must not be assumed to identify the screen resource image, HFD image, or PC updater.
 
+## Tooling: read-only descriptor inspector
+
+`scripts/inspect_l99_descriptor.py` is a read-only, offline descriptor-mapping tool for the factory
+AULA L99 screen resource image (`UartTFT-II_Flash.bin`). It never opens USB, COM, or HID, never
+imports serial/USB/HID/updater modules, and never modifies the source image.
+
+It resolves a descriptor (or a Page 21 touch return code) to its source offset, format, dimensions,
+encoded allocation, references, and decoded PNG, then classifies every finding as Verified, Inferred,
+or Unknown. Patch feasibility is reported as `PROVEN_FOR_OFFLINE_WORKING_COPY`, `UNRESOLVED`, or
+`REJECTED`.
+
+Placeholder usage (page / return-code mode; does not imply vendor images are included):
+
+    python scripts/inspect_l99_descriptor.py `
+        --image <path-to-UartTFT-II_Flash.bin> `
+        --manifest <path-to-manifest.json> `
+        --page 21 `
+        --return-code 0x003B `
+        --output <empty-output-directory>
+
+Direct descriptor mode:
+
+    python scripts/inspect_l99_descriptor.py `
+        --image <path> `
+        --manifest <path> `
+        --descriptor 341 `
+        --descriptor 342 `
+        --output <empty-output-directory>
+
+See `tests/test_inspect_l99_descriptor.py` for synthetic-test coverage (no vendor firmware embedded).
+
 ## Repository contents
 
 Only files tracked by Git are described here. Local ignored vendor binaries are not included.

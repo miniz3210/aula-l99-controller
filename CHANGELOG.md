@@ -3,40 +3,28 @@
 ## Unreleased
 
 ### Added
-- Created `docs/FIRMWARE_PACKAGE_MAP.md` clarifying package relationships and component identities.
-- Verified and compared two HFD_Code_V2.3.bin builds.
-- Consolidated project documentation: README.md, docs/PROJECT_HANDOVER.md, CHANGELOG.md.
-- Documented verified factory UI inspection counts and Page 21 Mini Numpad 17-zone map.
-- Documented verified screen upload protocol: 154 chunks, 150 x 2060-byte packets, four short commands.
-- Documented verified upload performance: official ~1.205 s vs current Python replay 41.616 s / 67.708 s.
-- Documented next transport milestone: scripts/replay_captured_screen_win32.py with native Windows overlapped I/O.
-- Documented safety constraints and version ambiguity (About-page V1.31 unresolved).
+- Added read-only offline screen descriptor inspector `scripts/inspect_l99_descriptor.py` (never opens hardware, never modifies the source image).
+- Added synthetic tests `tests/test_inspect_l99_descriptor.py` (32 tests, no vendor firmware required or embedded).
+- Verified Page 21 NumPad 1 descriptor mapping via factory validation.
+- Recorded descriptor 341/342 findings (offsets, format, dimensions, encoded length, allocation, hashes, references, verified boundaries).
+- Recorded patch feasibility as PROVEN_FOR_OFFLINE_WORKING_COPY (offline working copy only; metadata/checksum implications Unknown).
 
 ### Changed
-- Replaced repetitive changelog with curated release entries.
-- Removed obsolete image upload claim (standard JPEG with 64-byte header).
-- Removed unproven claims about firmware safety and universal recovery.
-
-### Fixed
-- Corrected project terminology regarding firmware component relationships based on static analysis.
-- Corrected protocol history: 115200 CDC line-coding is not the observed USB transfer throughput limit.
-- Corrected upload timing: official upload is ~1.2 seconds, not 30 to 40 seconds.
+- Updated docs/PROJECT_HANDOVER.md: added descriptor 341/342 mapping section and marked Workstream A complete.
+- Updated README.md: added read-only descriptor inspector tooling section.
+- Updated .gitignore: added local_analysis/.
 
 ### Verified
-- Factory reset ZIP: 45080624 bytes, SHA-256 e854bebb87a592eaa8553dacff103a7ae62007318592cba2159685fbdb3615e3.
-- UartTFT-II_Flash.bin: 127599044 bytes, SHA-256 4cb3fa5c77eea973a2b62ca61873f071692694f4c9a1832507fe2c8c9ba582b4.
-- HFD_Code_V2.2.bin: 305800 bytes, SHA-256 432e358cac96fb930ab680ada6f953c9005027c58b31b7ee3bb6bc7868ef35cf.
-- HFD_Code_V2.3.bin: 313652 bytes, SHA-256 a76806ada9648d2672bbebead8a9bb396c0bc6f3a0a071e22e99001ac3359d03.
+- Factory UartTFT-II_Flash.bin: size 127599044, SHA-256 4cb3fa5c77eea973a2b62ca61873f071692694f4c9a1832507fe2c8c9ba582b4 — unchanged before/after validation.
+- Page 21 return code 0x003B, rectangle [13,337,79,403], unpressed descriptor 341, pressed descriptor 342, goto_page 65535 — all confirmed.
+- Descriptor 341 (0x0155): bank 0, entry offset 6437504, asset offset 7849030 (0x0077C446), format 2 ARGB4444, 67x67, encoded 8978 bytes, allocation [7849030,7858008], boundary verified, unpressed role, 1 reference.
+- Descriptor 342 (0x0156): bank 0, entry offset 6437516, asset offset 7858008 (0x0077E758), format 2 ARGB4444, 67x67, encoded 8978 bytes, allocation [7858008,7866986], boundary verified, pressed role, 1 reference.
+- All synthetic tests pass; py_compile passes; no forbidden files staged.
 
 ### Safety
 - Original vendor images are immutable local references.
 - No firmware write from this repository is treated as safe by default.
 - No unknown flash addresses, no force mode, no arbitrary erase/write replay.
-
-### Next
-- Resolve descriptor 341/342 to source offsets, formats, dimensions, and allocations.
-- Build offline-only single-button patcher.
-- Implement native Win32 overlapped uploader.
 
 ## v0.1.0 - 2026-11-09
 

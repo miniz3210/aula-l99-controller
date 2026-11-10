@@ -176,6 +176,9 @@ crc_test_images/
 HardwareMonitor/
 qt-tool/
 
+# Local analysis output (read-only descriptor inspector results; never commit generated assets)
+local_analysis/
+
 # Generated payload files inside script folders
 scripts/*.txt
 scripts/__pycache__/
