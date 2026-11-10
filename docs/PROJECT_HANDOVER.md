@@ -1,984 +1,226 @@
-# AULA L99 Controller / Stream Deck Project Handover
+# AULA L99 Project Handover
 
-Continue this project from the current verified state. Do not restart the reverse engineering from scratch and do not repeat tests that are already marked as verified below.
+Continue this project from the verified state below. Do not restart the reverse engineering from scratch and do not repeat tests already marked verified.
 
-## Language and working style
+## 1. Mission
 
-- Reply in Cantonese or concise technical English, matching my message.
-- Be implementation-focused and evidence-based.
-- Give direct PowerShell or Python steps for Windows when action is needed.
-- Do not oversimplify USB, HID, serial, firmware, or binary-analysis details.
-- Verify against actual files, captures, logs, hashes, or command output before making strong claims.
-- If a previous assumption is contradicted by evidence, correct it immediately.
-- Do not tell me to commit, version-bump, tag, or push unless I explicitly ask.
-- Use English only inside code, commands, scripts, comments, file names, and technical agent prompts.
-- Every important technical step, discovery, test, file change, or decision must be recorded in a CHANGELOG section before ending the response.
-- For each changelog entry include:
-  - date/time if known
-  - action performed
-  - files created or changed
-  - commands or test method
-  - result
-  - conclusion
-  - remaining follow-up
-- Never perform firmware-write or destructive commands without first establishing a verified backup and recovery path.
+Turn the AULA L99 keyboard's built-in 320x480 touchscreen into a Stream Deck-style controller: custom icons, multiple independent touch zones, PC-side actions, and dynamic status fields, while preserving the stock touch-to-keyboard logic where practical.
 
----
+## 2. Current repository state
 
-# 1. Project goal
+- Main repository path: C:\temp\aula-l99-controller
+- Branch: main
+- Remote: miniz3210/aula-l99-controller.git
+- Current published release: v0.1.0
+- HEAD commit: 516e3c82cdbe6c95c10ef8a92d3d7764013192d9
+- Local ignored research directory: tools/softce-aula-l99-research
+- Vendor binaries and extracted artifacts are local only and ignored by Git.
 
-Build a custom Stream Deck-style controller using the AULA L99 keyboard’s built-in 320 x 480 touchscreen.
+## 3. Verified hardware architecture
 
-The desired end state is not merely keyboard macro remapping. The target experience is:
+Keyboard side:
+- USB HID controller: VID 0C45, PID 800A in wired mode.
+- Standard keyboard HID events.
+- Physical keyboard, lighting, wireless modes, and screen-to-keyboard event forwarding.
+- Three-mode behavior: wired, 2.4 GHz, Bluetooth.
+- Real-time telemetry uses a 64-byte HID Feature Report on Interface 3 (SET_REPORT, wValue 0x0300).
+- About-page version V1.31 source unresolved.
 
-- a visible custom Stream Deck page or widget on the keyboard screen
-- custom icons
-- multiple independent touch zones
-- PC-side actions
-- dynamic states such as mute/unmute, play/pause, VPN state, build state, CPU/GPU data, or other live status
-- ideally animated or multi-state icons
-- wired USB operation
+Screen side:
+- USB device: VID EEEF, PID 268A.
+- Windows CDC/serial interface, typically a COM port.
+- 320x480 touchscreen.
+- Built-in local page and resource engine.
+- LT168-family controller firmware.
+- HFD executable images disassemble as little-endian M*Core per external research.
 
-The first practical target is either:
+Keyboard events and screen runtime updates use different paths.
 
-1. add a new built-in widget/page, or
-2. reskin and repurpose the existing numpad page while preserving its 17 touch zones.
+## 4. Verified public and local artifacts
 
-A plain NumPad-to-macro bridge is not sufficient by itself.
+Public repository files:
+- README.md, CHANGELOG.md, VERSION, .gitignore, LICENSE
+- scripts/ analysis and replay tools
+- docs/ handover, protocol notes, third-party references, and data CSVs
 
----
+Local ignored artifacts:
+- tools/softce-aula-l99-research/ (softce research checkout)
+- Official reset ZIP (45080624 bytes, SHA-256 e854bebb...)
+- UartTFT-II_Flash.bin (127599044 bytes, SHA-256 4cb3fa5c...)
+- HFD_Code_V2.2.bin (305800 bytes, SHA-256 432e358c...)
+- HFD_Code_V2.3.bin (313652 bytes, SHA-256 a76806ad...)
+- HFD_ISP_TOOL_V1.31.exe, Flash.ini
+- Captures, dumps, decoded assets, virtual environments
 
-# 2. Current project location
+External third-party repositories (not vendored):
+- https://github.com/softce/aula-l99-research
+- https://github.com/gavindi/Aula_L99_Linux
+- https://github.com/mos9527/evbunpack
 
-Local Windows project root:
+Same-named firmware files may contain different builds and must be identified by hash, not filename.
 
-C:\temp\aula-l99-controller
+## 5. Verified screen upload protocol
 
-Public GitHub repository:
+- Official captured photo upload contains 154 logical chunks.
+- 150 chunks are 2060-byte data packets.
+- Four are short control or commit commands.
+- Total captured stream is approximately 309071 bytes.
+- The screen acknowledges packet transfers.
+- Upload targets photo/background/GIF flash slots.
+- Upload does not overlay the built-in Mini Numpad page.
+- The image payload is not standard JPEG. Obsolete JPEG/64-byte-header claims are removed.
+- ACK does not prove address safety.
 
-https://github.com/miniz3210/aula-l99-controller
+## 6. Verified performance evidence
 
-Git branch:
+- Official application: approximately 1.205 seconds, 150 x 2060-byte USB Bulk OUT transfers.
+- Current Python replay: stable verified run 41.616 seconds with 151 ACKs; slower baseline 67.708 seconds with 150 ACKs.
+- Root cause: current replay splits each 2060-byte logical packet into approximately 33 synchronous 64-byte pyserial writes, each artificially paced.
+- The 115200 CDC line-coding value is not a reliable physical throughput limit for this USB bulk implementation.
+- Write timeout leaves the endpoint wedged; a device power cycle is required before another live test.
+- Next transport: scripts/replay_captured_screen_win32.py with native Windows overlapped I/O, complete 2060-byte logical packets, asynchronous ACK reads, no USB driver replacement, no Zadig/WinUSB/libusbK in the first implementation.
 
-main
+## 7. Verified factory resource image
 
-Latest verified push completed successfully.
+- Extraction source: official AULA reset package dated 2026-05-25, recovered via the softce hash-locked offline extractor.
+- Verified by size and SHA-256 against the research repository documentation.
+- Inspector results: 30 pages, 385 display records, 187 touch records, 1138 icon descriptors, 811 unique decoded images, 3 animations, 134 animation frames.
+- Manifest records 26 wider-image decode issues, primarily invalid-bounds descriptor candidates.
+- Page 21 rendered successfully as the factory Mini Numpad page.
+- Limitation: this is the screen resource image, not a raw NAND dump; it does not include verified per-device OOB, ECC, bad-block, calibration, or unique-board data.
 
-Latest merge commit observed:
+## 8. Page 21 Mini Numpad
 
-e5fcb4e Merge GitHub initialization and keep local project files
+Page 21 has 11 display records and 18 touch records. Seventeen are type 0xC001 action records; one is a type 0x8001 Home/back navigation record.
 
-After the successful push, Git reported:
+Home/back: return value 0x0020, goto page 1. NumPad actions: goto_page 65535. Descriptor range: decimal 319 through 352 (hex 0x013F through 0x0160).
 
-- branch main tracks origin/main
-- branch is up to date with origin/main
-- nothing to commit
-- working tree clean
+| Command | Button | Rectangle [x1,y1,x2,y2] | Normal/Pressed icons |
+|---------|--------|-------------------------|----------------------|
+| 0x0030 | Num | [13,115,79,181] | 319/320 |
+| 0x0031 | Divide | [89,115,155,181] | 321/322 |
+| 0x0032 | Multiply | [165,115,231,181] | 323/324 |
+| 0x0033 | Minus | [243,115,309,181] | 325/326 |
+| 0x0034 | NumPad 7 | [13,190,79,256] | 327/328 |
+| 0x0035 | NumPad 8 | [89,190,155,256] | 329/330 |
+| 0x0036 | NumPad 9 | [165,190,231,256] | 331/332 |
+| 0x0037 | Plus | [243,190,309,327] | 333/334 |
+| 0x0038 | NumPad 4 | [13,263,79,329] | 335/336 |
+| 0x0039 | NumPad 5 | [89,263,155,329] | 337/338 |
+| 0x003A | NumPad 6 | [165,263,231,329] | 339/340 |
+| 0x003B | NumPad 1 | [13,337,79,403] | 341/342 |
+| 0x003C | NumPad 2 | [89,337,155,403] | 343/344 |
+| 0x003D | NumPad 3 | [165,337,231,403] | 345/346 |
+| 0x003E | Enter | [243,337,309,474] | 351/352 |
+| 0x003F | NumPad 0 | [13,407,150,473] | 347/348 |
+| 0x0040 | Decimal/Delete | [165,407,231,473] | 349/350 |
 
-Important: the local project contains many ignored captures, vendor assets, firmware files, dumps, virtual environments, generated payloads, and third-party source trees. Do not use `git add .`. Add files explicitly.
+The 17 buttons use 34 normal/pressed icon descriptors.
 
-Safe update pattern:
+## 9. Version ambiguity
+
+- Device About page displays AULA L99 V1.31.
+- Source of V1.31 is not proven.
+- It may be keyboard MCU, screen MCU, UI/project version, or whole-device product version.
+- HFD_ISP_TOOL_V1.31.exe version must not be equated automatically with the About-page version.
+- HFD_Code V2.2/V2.3 names are separate version domains.
+- Firmware compatibility must be based on screen-side identifiers, hashes, layout, and official package targeting.
+
+## 10. What has been disproved or corrected
+
+- The image stream is not standard JPEG.
+- The 115200 line-coding value is not the observed USB transfer throughput limit.
+- Official upload is approximately 1.2 seconds, not 30 to 40 seconds.
+- Framebuffer upload does not overlay the Mini Numpad page.
+- The external 2026-05-25 reset package contains the complete known UI/resource update image.
+- About-page V1.31 is not proven to be a screen firmware version.
+- Acknowledgement does not establish flash address safety.
+- check_upload_fits() is not a universal allowlist and can be bypassed or fail open for unknown addresses depending on the caller.
+- The exact cause of the external author's bricked keyboard remains unproven.
+
+## 11. Safety constraints
+
+- Original vendor images are immutable local references.
+- No firmware write from this repository MUST be treated as safe by default.
+- NO unknown flash addresses.
+- NO force mode.
+- NO arbitrary erase/write replay.
+- NO firmware update during extraction or inspection.
+- NO claim of universal brick recovery.
+- Hardware writes are BLOCKED pending offline patch validation and recovery review.
+
+## 12. Immediate next milestone
+
+Two workstreams:
+
+Workstream A — Offline descriptor and resource mapping:
+- Descriptor 341/342 resolution to source offsets, formats, dimensions, and allocations.
+- One NumPad 1 icon experiment.
+- No hardware writes.
+
+Workstream B — Win32 overlapped uploader:
+- Implement scripts/replay_captured_screen_win32.py.
+- Complete 2060-byte writes.
+- No USB driver replacement.
+- Preserve a stable pyserial fallback.
+
+Workstream A MUST be completed before any modified firmware write. Workstream B MAY be developed using the existing known-safe photo upload path.
+
+## 13. Acceptance criteria
+
+Offline patcher:
+- Factory source unchanged.
+- Separate output file.
+- Only intended asset bytes and required metadata changed.
+- No touch record changes.
+- Inspector still parses Page 21.
+- All 17 actions remain mapped.
+- Replacement allocation is in bounds.
+- SHA-256 and diff report generated.
+
+Win32 uploader:
+- Compiles or passes py_compile as applicable.
+- Does not split logical packets in userland unless required by Win32.
+- Preserves command ordering.
+- Receives expected ACK count.
+- Handles cancellation safely.
+- Reports exact failing packet and offset.
+- Never retries automatically after timeout.
+- Requires explicit power cycle after endpoint wedge.
+- Initial target under 10 seconds.
+- Final target close to official 1 to 2 seconds.
+
+## 14. Known external references
+
+- softce/aula-l99-research — verified factory reset extraction offsets, hash-locked extractor, UI parser, page/resource research, demonstrated custom UI approach.
+- gavindi/Aula_L99_Linux — extensive keyboard and screen protocol research, Linux tools, captures, upload format work; protocol baseline for general photo/GIF/RTC/audio-spectrum work.
+- mos9527/evbunpack — Enigma Virtual Box extraction used to inspect the official updater container.
+
+Neither third-party tree is committed to this project, and third-party firmware or artwork is not licensed by this repository.
+
+## 15. Resume commands
+
+Run each as a simple PowerShell command or a complete script block. Do not split if/else across interactive lines.
 
 cd "C:\temp\aula-l99-controller"
 
 git status
-git add -- <specific-file>
-git commit -m "<description>"
-git push
+git branch --show-current
+git remote -v
+git log --oneline --decorate -5
 
----
+ii tools/softce-aula-l99-research
 
-# 3. GitHub contents
+Get-Content tools/softce-aula-l99-research/inspection/page21_summary.json
 
-The repository currently contains the cleaned public research/tooling set, including:
+ii tools/softce-aula-l99-research/inspection/pages/page_21_bank0.png
+ii tools/softce-aula-l99-research/inspection/pages/page_21_bank1.png
 
-- .gitignore
-- LICENSE
-- README.md
-- requirements.txt
-- analyze_aula_captures.py
-- list_0c45_800a.py
-- monitor_l99_com.py
-- docs/
-- scripts/
+py -m pytest
 
-Documentation includes:
+Get-FileHash tools/softce-aula-l99-research/input/L99-reset.zip -Algorithm SHA256
+Get-FileHash tools/softce-aula-l99-research/extracted/UartTFT-II_Flash.bin -Algorithm SHA256
+Get-FileHash tools/softce-aula-l99-research/extracted/HFD_Code_V2.2.bin -Algorithm SHA256
+Get-FileHash tools/softce-aula-l99-research/extracted/HFD_Code_V2.3.bin -Algorithm SHA256
 
-- docs/THIRD_PARTY_REFERENCES.md
-- docs/WIN32_SERIAL_REPLAY_NOTES.md
-- docs/data/device_mapping.csv
-- docs/data/numpad_hid_mapping.csv
-- docs/data/realtime_feature_report_layout.csv
-
-The incomplete pseudo-Python file:
-
-scripts/replay_captured_screen_win32.py
-
-was not valid Python. It contained only this outline:
-
-CreateFileW("\\\\.\\COM8")
-SetupComm
-SetCommState
-SetCommTimeouts
-WriteFile with OVERLAPPED
-WaitForSingleObject
-ClearCommError
-ReadFile
-
-It was converted into:
-
-docs/WIN32_SERIAL_REPLAY_NOTES.md
-
-All remaining project Python files passed `py -m py_compile`.
-
----
-
-# 4. Git ignore and prohibited public content
-
-The following must remain local and must not be pushed to the public repository:
-
-- .venv-evbunpack/
-- tools/
-- tools/Aula_L99_Linux-main/
-- tools/evbunpack-main/
-- firmware/
-- evbunpack_output/
-- evbunpack_list_test/
-- hfd_inner files/directories
-- isp_memory_dumps/
-- isp_runtime_dump/
-- capture_analysis/
-- HardwareMonitor/
-- qt-tool/
-- skins/
-- device/
-- font/
-- gif/
-- language/
-- layouts/
-- USB captures
-- PCAP/PCAPNG files
-- memory dumps
-- official firmware
-- extracted vendor EXEs, DLLs, SYS files and BIN files
-- generated frame/payload text files
-- decoded image variants
-- local benchmark logs
-- test images
-- Python virtual environments and caches
-
-Do not redistribute vendor firmware or extracted proprietary binaries. It is acceptable to publish independently written analysis, file names, sizes, hashes, protocol structure, and original scripts.
-
----
-
-# 5. Verified hardware architecture
-
-The AULA L99 exposes multiple relevant USB devices:
-
-## Screen controller
-
-VID:PID:
-
-EEEF:268A
-
-Role:
-
-- CDC/serial screen transport
-- framebuffer/image transfer
-- flash-slot operations
-- Windows virtual COM port, previously COM8
-
-## Keyboard HID controller
-
-VID:PID:
-
-0C45:800A
-
-Role:
-
-- normal keyboard reports
-- numpad page HID reports
-- 64-byte HID Feature Reports
-- real-time CPU/GPU/date/weather data transport
-- Interface 3 is used for the Feature Report protocol
-
-## Touch and pointer controller
-
-VID:PID:
-
-1A86:8091
-
-Observed functions:
-
-- endpoint 0x82: 11-byte relative mouse reports
-- endpoint 0x83: UI press/release reports
-- touchpad/mouse page functions
-
-## Display
-
-Resolution:
-
-320 x 480
-
----
-
-# 6. Verified built-in numpad behavior
-
-The built-in numpad page provides 17 distinct touch zones.
-
-The full verified HID mapping is:
-
-1. Num Lock: 0x53
-2. NumPad Divide: 0x54
-3. NumPad Multiply: 0x55
-4. NumPad Minus: 0x56
-5. NumPad 7: 0x5F
-6. NumPad 8: 0x60
-7. NumPad 9: 0x61
-8. NumPad Plus: 0x57
-9. NumPad 4: 0x5C
-10. NumPad 5: 0x5D
-11. NumPad 6: 0x5E
-12. NumPad 1: 0x59
-13. NumPad 2: 0x5A
-14. NumPad 3: 0x5B
-15. NumPad Enter: 0x58
-16. NumPad 0: 0x62
-17. NumPad Decimal/Delete: 0x63
-
-Each press appears as a standard 8-byte keyboard HID report, for example:
-
-00 00 5F 00 00 00 00 00
-
-Release:
-
-00 00 00 00 00 00 00 00
-
-The five-key verification sequence:
-
-7, 5, 1, +, Enter
-
-produced:
-
-0x5F, 0x5D, 0x59, 0x57, 0x58
-
-This is a reliable basis for a Stream Deck-style page if the visual resources can be reskinned.
-
----
-
-# 7. Runtime overlay result
-
-A critical test was completed:
-
-Test setup:
-
-- official AULA program closed
-- screen manually placed on built-in numpad page
-- USB capture started
-- known working COM8 framebuffer replay executed
-- original numpad positions 7, 5, 1, +, Enter pressed afterward
-
-Result:
-
-- the numpad screen image did not change
-- all five touch actions remained functional
-- Notepad received 751+ and Enter correctly
-
-Conclusion:
-
-The normal COM8 framebuffer/photo upload path does not overlay or replace the built-in numpad UI.
-
-The photo framebuffer/flash-slot path and the firmware-rendered built-in page system are separate display paths.
-
-Therefore this design does not work:
-
-enter numpad page
-then upload arbitrary framebuffer
-then retain touch zones under the custom image
-
-The path forward requires locating and modifying built-in UI resources/page descriptors, or finding a currently unused page/widget/flash slot that the firmware can route to.
-
-Do not repeat this overlay test unless a different command, slot, or page-rendering protocol has been identified.
-
----
-
-# 8. Verified real-time Widget Feature Report
-
-The real-time data page receives a 64-byte HID Feature Report through:
-
-- device 0C45:800A
-- Interface 3
-- SET_REPORT
-- wValue 0x0300
-- 64-byte report
-
-The update cycle occurs approximately every 5 seconds.
-
-Observed command sequence:
-
-04 18 ...
-04 28 ...
-00 01 5A [data] ... AA 55
-04 02 ...
-
-The actual telemetry payload begins:
-
-00 01 5A
-
-and ends:
-
-AA 55
-
-Verified layout:
-
-Offset 0 to 2:
-- header 00 01 5A
-
-Offset 3:
-- year minus 2000
-- 0x1A means 2026
-
-Offset 4:
-- month
-
-Offset 5:
-- day
-
-Offset 6:
-- hour
-
-Offset 7:
-- minute
-
-Offset 8:
-- second
-
-Offsets 9 to 12:
-- unresolved
-
-Offset 13:
-- CPU usage percent
-- verified by controlled CPU load
-
-Offset 14:
-- CPU temperature candidate
-- official monitor returned zero on the test system
-
-Offset 15:
-- GPU usage percent
-- verified against nvidia-smi
-
-Offset 16:
-- GPU temperature in degrees Celsius
-- verified against nvidia-smi
-
-Offsets 17 to 21:
-- likely weather/environmental fields
-- not yet fully mapped in this project
-
-Offsets 22 to 61:
-- observed as zero/reserved in the tested packets
-
-Offsets 62 to 63:
-- AA 55 trailer
-
-Controlled CPU load raised offset 13 from low values to approximately 0x4D to 0x52, matching roughly 77 to 82 percent CPU usage.
-
-Controlled GPU testing confirmed offset 15 changes with GPU usage and offset 16 follows the NVIDIA GPU temperature.
-
----
-
-# 9. Hardware-monitor issue and resolution
-
-The AULA hardware monitor initially showed fixed values such as:
-
-- CPU 19 percent
-- GPU 27 percent
-
-The USB Feature Reports also repeatedly transmitted those same values.
-
-Cause:
-
-Bitdefender Antivirus Free blocked:
-
-C:\Program Files (x86)\AULA L99\HardwareMonitor\OpenHardwareMonitorServer.sys
-
-The detection referenced a WinRing/OpenHardwareMonitor-style low-level driver.
-
-An antivirus exception was added for the verified official AULA hardware-monitor component. After restarting the AULA monitor chain:
-
-OpenHardwareMonitorServer.exe ran successfully and responded.
-
-Process path:
-
-C:\Program Files (x86)\AULA L99\HardwareMonitor\OpenHardwareMonitorServer.exe
-
-Afterward CPU and GPU values changed normally.
-
-Conclusion:
-
-The fixed telemetry was a PC-side sensor-driver issue, not a screen protocol issue.
-
----
-
-# 10. Captures and analysis completed
-
-Multiple captures were created and analyzed locally, including:
-
-- aula_numpad_5keys.pcapng
-- aula_numpad_all_keys.pcapng
-- aula_calculator_all_keys.pcapng
-- aula_mouse_controls.pcapng
-- aula_home_all_buttons.pcapng
-- aula_home_numpad_transition.pcapng
-- aula_photo_touch_points.pcapng
-- aula_realtime_idle_60s.pcapng
-- aula_realtime_cpu_load.pcapng
-- aula_realtime_cpu_load_v2.pcapng
-- aula_realtime_gpu_load.pcapng
-- aula_realtime_gpu_load_v3.pcapng
-- aula_official_refresh.pcapng
-- aula_solid_black.pcapng
-- aula_solid_white.pcapng
-- aula_upload_test.pcapng
-- aula_numpad_framebuffer_overlay.pcapng
-
-These captures are local and excluded from GitHub.
-
-The batch analyzer:
-
-analyze_aula_captures.py
-
-extracts:
-
-- endpoint summaries
-- all USB payloads
-- keyboard reports
-- consumer-control candidates
-- 11-byte mouse reports
-- 21-byte touch/UI reports
-- large screen packets
-- timing summaries
-- cross-capture summaries
-
-Important compatibility note:
-
-This Wireshark/tshark build does not support `frame_raw` as a `-T fields` field.
-
-The working payload fallback chain uses:
-
-- usbhid.data
-- usbcom.data.out_payload
-- usb.capdata
-
-Do not reintroduce `frame_raw` into `-T fields`.
-
----
-
-# 11. Image and framebuffer findings
-
-Previous work established:
-
-- official screen upload uses approximately 150 large packets plus short commands
-- large packet data is not normal JPEG
-- the payload uses a custom framebuffer/image format
-- CRC-16/ARC-style validation was investigated and replayed
-- custom screen uploads work for the photo/framebuffer route
-- black and white test captures were compared
-- official full-frame upload can complete far faster than the original Python replay
-- Python replay was much slower due to conservative delays
-
-However, the custom framebuffer route does not replace built-in numpad resources.
-
-The public repository contains independently written analysis and replay scripts, but raw vendor captures and payload dumps remain local.
-
----
-
-# 12. Firmware updater extraction completed
-
-The official updater:
-
-L99 ISP V1.23.exe
-
-was identified as an Enigma Virtual Box container.
-
-`evbunpack` v0.2.6 was installed locally in:
-
-C:\temp\aula-l99-controller\.venv-evbunpack
-
-The virtual filesystem was successfully extracted.
-
-Relevant extracted files:
-
-- Flash.ini
-- HFD_Code_V2.2.bin
-- HFD_Code_V2.3.bin
-- HFD_ISP_TOOL_V1.31.exe
-- Qt runtime DLLs and plugins
-
-Observed approximate extracted sizes:
-
-- Flash.ini: 0x623 bytes
-- HFD_Code_V2.2.bin: 0x4AA88 bytes
-- HFD_Code_V2.3.bin: 0x4C8A0 bytes
-- HFD_ISP_TOOL_V1.31.exe: 0x18400 bytes
-
-The expected name:
-
-UartTFT-II_Flash.bin
-
-was not present in the outer Enigma virtual filesystem.
-
-Possible interpretations:
-
-1. the file is inside a second-level container
-2. the name is only a default path/string in HFD_ISP_TOOL_V1.31.exe
-3. the full UI SPI-flash image is not distributed and must be read from the device
-4. HFD_Code files may be controller code rather than the full UI resource image
-
-All extracted vendor files remain excluded from GitHub.
-
-No modified firmware has been flashed.
-
----
-
-# 13. Third-party research reference
-
-A highly relevant public project was found:
-
-https://github.com/gavindi/Aula_L99_Linux
-
-A local copy exists under:
-
-C:\temp\aula-l99-controller\tools\Aula_L99_Linux-main
-
-It is excluded from this repository and must not be vendored or committed.
-
-This project reportedly already covers or documents:
-
-- screen serial transport
-- HID Feature Reports
-- real-time telemetry fields
-- photo-frame and background flash slots
-- image conversion
-- animated GIF container generation
-- RGB565 palette handling
-- RLE
-- screen packet checksums
-- audio spectrum data
-- firmware-updater analysis
-- LT7689-related work
-- an unknown flash slot around 0x04200000
-
-Use that project as the baseline reference and avoid repeating solved general-protocol work.
-
-Our project’s additional findings include:
-
-- full 17-key built-in numpad HID mapping
-- verified built-in numpad touch behavior under Windows
-- confirmation that normal framebuffer replay cannot overlay the built-in numpad page
-- controlled CPU/GPU verification under Windows
-- official monitor failure due to antivirus blocking
-- extracted official updater components
-- public cleaned Windows-focused tooling repository
-
-Also used locally:
-
-https://github.com/mos9527/evbunpack
-
-Neither third-party tree is committed to this project.
-
----
-
-# 14. What is completed
-
-Completed and verified:
-
-- project moved to C:\temp\aula-l99-controller
-- clean public GitHub repository created and pushed
-- MIT license added
-- README added
-- third-party references documented
-- local/proprietary files excluded
-- all public Python scripts compile
-- invalid pseudo-Python Win32 file converted into documentation
-- relevant USB devices identified
-- numpad page mapped to 17 HID actions
-- real-time 64-byte Feature Report identified
-- date/time offsets identified
-- CPU usage offset verified
-- GPU usage offset verified
-- GPU temperature offset verified
-- AULA monitor fixed after antivirus blockage
-- image/framebuffer upload route analyzed
-- runtime numpad-overlay approach tested and disproved
-- official updater’s Enigma VFS extracted
-- HFD_Code V2.2 and V2.3 extracted
-- HFD_ISP_TOOL_V1.31.exe extracted
-- third-party Aula_L99_Linux project identified as a major reference
-- local Git and remote histories merged correctly
-- GitHub push succeeded
-- local main branch is up to date with origin/main
-
----
-
-# 15. What remains unresolved
-
-Primary unresolved technical questions:
-
-## Built-in page/resource system
-
-- Where are the built-in page descriptors?
-- Where are the built-in page bitmaps/icons?
-- Are those resources located in HFD_Code_V2.3.bin, another MCU flash region, or external SPI flash?
-- Where is the numpad page descriptor?
-- Where is the home-widget routing table?
-- Is the widget count fixed or table-driven?
-- Can a new page descriptor be added?
-- Is there an unused/hidden page ID?
-- What is stored at the unknown flash slot around 0x04200000?
-
-## Full UI flash extraction
-
-- `UartTFT-II_Flash.bin` was not found in the updater’s outer VFS.
-- Determine whether HFD_ISP_TOOL_V1.31.exe contains a nested resource/container.
-- Determine whether the ISP protocol supports read-back.
-- Establish a complete SPI-flash backup before any write.
-- Establish a recovery or bootloader procedure before modifying flash.
-
-## Numpad reskin
-
-- Locate the numpad bitmap/icon resources.
-- Locate touch/action descriptor table.
-- Search for the 17 HID usage values as a firmware signature:
-  53 54 55 56 5F 60 61 57 5C 5D 5E 59 5A 5B 58 62 63
-- Determine whether those values appear contiguously, encoded, or generated.
-- Trace neighboring structures to other page descriptors.
-- Replace only one harmless visual resource first.
-- Preserve original size/alignment/checksum.
-- Do not flash until a verified backup exists.
-
-## Add a new widget
-
-- Determine whether a new home widget can be appended.
-- Determine whether an existing hidden/unused widget can be activated.
-- Determine whether page IDs and home routing are table-driven.
-- Determine if the unknown flash slot can hold a custom page/resource set.
-- Determine whether the real-time data-rendering engine can be reused for custom status icons.
-
-## Animation
-
-- Static reskin is likely easier than independent high-frame-rate animation.
-- Multi-state or low-frequency dynamic icons may be possible.
-- The 64-byte telemetry path proves low-cost local rendering exists, but it does not yet prove arbitrary numpad-icon updates.
-- Audio-spectrum opcode/data may offer another dynamic-rendering path.
-- Arbitrary per-icon animation is not yet verified.
-
----
-
-# 16. Recommended next step
-
-Do not do more generic screen-upload or CPU/GPU protocol tests.
-
-The next task should be a read-only cross-analysis of:
-
-C:\temp\aula-l99-controller\evbunpack_output\HFD_Code_V2.2.bin
-C:\temp\aula-l99-controller\evbunpack_output\HFD_Code_V2.3.bin
-C:\temp\aula-l99-controller\evbunpack_output\HFD_ISP_TOOL_V1.31.exe
-C:\temp\aula-l99-controller\evbunpack_output\Flash.ini
-C:\temp\aula-l99-controller\tools\Aula_L99_Linux-main\documentation\Firmware
-C:\temp\aula-l99-controller\tools\Aula_L99_Linux-main\tools\aula_l99_screen
-
-Priority:
-
-1. inspect the third-party firmware documentation and code
-2. search for 0x04200000 and all documented flash slots
-3. inspect HFD_ISP_TOOL_V1.31.exe strings/imports/resources
-4. test for nested containers without executing a flash operation
-5. search both HFD_Code files for:
-   - the 17 NumPad HID usage sequence
-   - partial permutations of that sequence
-   - screen dimensions 320 and 480 in little and big endian
-   - known page/action constants
-   - flash addresses from Aula_L99_Linux
-6. compare V2.2 and V2.3 structurally
-7. identify changed regions and embedded tables
-8. write findings into project documentation
-9. add a changelog entry for every verified step
-
-Do not assume `HFD_Code_V2.3.bin` is the full UI image. Prove the role of each file first.
-
----
-
-# 17. Change log
-
-## 2026-11-07: Screen-transfer groundwork
-
-Action:
-- Captured and analyzed official image upload traffic.
-- Compared solid-color transfers.
-- Identified approximately 150 large data packets plus short commands.
-- Investigated custom framebuffer encoding and CRC behavior.
-- Built Python replay and extraction tools.
-
-Files and artifacts:
-- aula_official_refresh.pcapng
-- aula_solid_black.pcapng
-- aula_solid_white.pcapng
-- aula_upload_test.pcapng
-- replay_captured_screen.py
-- push_solid_color.py
-- decode_captured_frame.py
-- extract_raw_usb_payloads.py
-- CRC-analysis scripts
-
-Result:
-- Screen upload path could be replayed.
-- Payload was confirmed not to be ordinary JPEG.
-- Full-screen transfers were linked to the EEEF:268A serial screen controller.
-
-Follow-up:
-- Determine whether the same display path can affect built-in firmware pages.
-
-## 2026-11-08: Numpad HID mapping
-
-Action:
-- Captured five numpad keys, then all numpad touch zones.
-- Used tshark `usbhid.data`.
-- Verified standard 8-byte keyboard HID reports.
-
-Files:
-- aula_numpad_5keys.pcapng
-- aula_numpad_all_keys.pcapng
-- docs/data/numpad_hid_mapping.csv
-
-Result:
-- 17 distinct numpad touch zones were mapped.
-- Device 16, endpoint 0x81 produced the HID reports.
-
-Conclusion:
-- Built-in numpad page is a strong candidate for a Stream Deck reskin.
-- Simple macro remapping alone is not the project goal.
-
-Follow-up:
-- Locate and alter visual resources while preserving action zones.
-
-## 2026-11-08: Other built-in page captures
-
-Action:
-- Captured calculator, mouse/touchpad, home navigation, photo-frame touch behavior, and real-time page traffic.
-
-Files:
-- aula_calculator_all_keys.pcapng
-- aula_mouse_controls.pcapng
-- aula_home_all_buttons.pcapng
-- aula_home_numpad_transition.pcapng
-- aula_photo_touch_points.pcapng
-- aula_realtime_idle_60s.pcapng
-
-Result:
-- Calculator did not emit normal keyboard HID reports.
-- Touchpad page generated relative mouse traffic.
-- Built-in page switching did not use full framebuffer uploads.
-- Real-time page did not continuously transfer full frames.
-
-Follow-up:
-- Find lightweight real-time data transport.
-
-## 2026-11-08: Batch capture analyzer
-
-Action:
-- Created `analyze_aula_captures.py`.
-- Added endpoint, HID, consumer, mouse, touch, large-packet, and timing reports.
-- Corrected tshark incompatibility.
-
-Important correction:
-- `frame_raw` is invalid in this tshark build under `-T fields`.
-- Working payload sources are `usbhid.data`, `usbcom.data.out_payload`, and `usb.capdata`.
-
-Result:
-- Batch analysis completed across 16 captures.
-- Numpad presses and large screen packets were detected correctly.
-
-Follow-up:
-- Keep the analyzer compatible with the current Wireshark build.
-
-## 2026-11-08: USB device mapping
-
-Action:
-- Extracted enumeration VID/PID values.
-
-Result:
-- Device 15: EEEF:268A screen controller.
-- Device 16: 0C45:800A keyboard HID.
-- Device 13: 1A86:8091 touch/pointer controller.
-- Device 6: 05E3:0626 USB hub and unrelated to telemetry.
-
-Conclusion:
-- Large amounts of device-6 traffic were excluded as hub/network noise.
-
-## 2026-11-08: Real-time Feature Report protocol
-
-Action:
-- Isolated device-16 control traffic.
-- Extracted 64-byte SET_REPORT payloads every approximately 5 seconds.
-- Compared multiple cycles.
-
-Result:
-- Identified header `00 01 5A`.
-- Identified date/time fields.
-- Identified `AA 55` trailer.
-- Confirmed a four-command cycle around the telemetry payload.
-
-Follow-up:
-- Map CPU/GPU and weather offsets.
-
-## 2026-11-08: CPU-load verification
-
-Action:
-- Ran controlled baseline, CPU-load, and cooldown test.
-- Captured real-time Feature Reports.
-
-Result:
-- Offset 13 tracked CPU usage.
-- CPU usage rose to approximately 77 to 82 percent during load.
-- Offset 14 remained zero on the test machine.
-
-Conclusion:
-- Offset 13 is verified CPU usage.
-- CPU temperature was not provided by the official monitor on this hardware.
-
-## 2026-11-08: Antivirus hardware-monitor issue
-
-Action:
-- Investigated telemetry values stuck at CPU 19 percent and GPU 27 percent.
-- Found Bitdefender had blocked OpenHardwareMonitorServer.sys.
-- Added a verified exception and restarted the monitor chain.
-
-Result:
-- OpenHardwareMonitorServer.exe ran and responded.
-- Telemetry began changing.
-
-Conclusion:
-- Fixed values were caused by the PC-side sensor driver, not the USB protocol.
-
-## 2026-11-08: GPU-load verification
-
-Action:
-- Logged `nvidia-smi`.
-- Ran GPU-load capture.
-- Compared AULA Feature Reports against NVIDIA usage and temperature.
-
-Files:
-- aula_realtime_gpu_load_v3.pcapng
-- realtime_gpu_load_v3_payloads.txt
-- nvidia_gpu_load_v3.csv
-- gpu_load_test_v3_timeline.txt
-
-Result:
-- Offset 15 tracked GPU usage.
-- Offset 16 tracked GPU temperature.
-- Five-second AULA samples did not capture every one-second NVIDIA utilization spike, which is expected.
-
-Conclusion:
-- Offsets 15 and 16 are verified.
-
-## 2026-11-08: Numpad framebuffer overlay test
-
-Action:
-- Entered numpad page with official AULA application closed.
-- Started USB capture.
-- Replayed a known working framebuffer upload through COM8.
-- Pressed original numpad positions 7, 5, 1, +, Enter.
-
-Result:
-- Built-in numpad image did not change.
-- All five HID actions remained functional.
-
-Conclusion:
-- Normal framebuffer/photo upload does not overlay built-in firmware pages.
-- Runtime overlay approach is rejected.
-- Resource or page-table modification is required.
-
-## 2026-11-08: Official updater extraction
-
-Action:
-- Installed evbunpack locally.
-- Listed the Enigma Virtual Box filesystem.
-- Extracted the updater VFS without restoring the outer PE.
-
-Files extracted locally:
-- Flash.ini
-- HFD_Code_V2.2.bin
-- HFD_Code_V2.3.bin
-- HFD_ISP_TOOL_V1.31.exe
-- Qt dependencies
-
-Result:
-- Extraction completed successfully.
-- `UartTFT-II_Flash.bin` was not present in the outer VFS.
-
-Conclusion:
-- Full built-in UI resources may be elsewhere or require device read-back.
-
-Follow-up:
-- Inspect the inner ISP tool and firmware files without writing to hardware.
-
-## 2026-11-08: Aula_L99_Linux reference found
-
-Action:
-- Located https://github.com/gavindi/Aula_L99_Linux
-- Downloaded a local copy.
-- Marked the third-party tree as excluded from Git.
-
-Result:
-- Major portions of general protocol research already exist publicly.
-- Project focus was narrowed to built-in page/resource/action modification.
-
-Conclusion:
-- Do not repeat solved photo/GIF/RTC/audio-spectrum work.
-- Use the external project as a protocol baseline.
-
-## 2026-11-08: Project relocation and GitHub cleanup
-
-Action:
-- Relocated project to:
-  C:\temp\aula-l99-controller
-- Added `.gitignore`.
-- Excluded virtual environments, tools, captures, firmware, dumps, vendor assets, generated payloads, and third-party repositories.
-- Created README, MIT license, requirements, documentation, and clean data mappings.
-- Converted invalid Win32 pseudo-code into documentation.
-- Compiled all remaining public Python files.
-
-Result:
-- Public GitHub repository created:
-  https://github.com/miniz3210/aula-l99-controller
-- Local and remote unrelated histories were merged.
-- Push completed successfully.
-- Local `main` tracks `origin/main`.
-- Working tree was clean at completion.
-
-Follow-up:
-- Continue development using explicit `git add -- <file>` only.
-- Maintain this changelog after every important step.
-
----
-
-# 18. Required behavior for the next assistant
-
-Start by acknowledging the verified state briefly, then inspect the requested current files before suggesting new reverse-engineering steps.
-
-Do not ask me to rediscover device IDs, repeat CPU/GPU testing, repeat the numpad overlay test, or re-extract the outer Enigma container.
-
-For every important action in the new chat:
-
-1. state the exact goal
-2. specify the input files
-3. provide safe commands
-4. state expected output
-5. interpret actual output
-6. update completed work
-7. update remaining work
-8. append a structured changelog entry
-
-The immediate next analysis target is the built-in UI page/resource/action system, not general image upload.
+cd "C:\temp\aula-l99-controller"
