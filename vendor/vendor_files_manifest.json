@@ -1,0 +1,131 @@
+{
+  "schema": "vendor_files_manifest v1",
+  "project": "aula-l99-controller",
+  "release": "v0.5.0",
+  "commit": "be247bb",
+  "decision": "NO-GO",
+  "generated": "2026-11-10T12:53:39Z",
+  "method": "offline static analysis only; no EXE executed, no hardware accessed",
+  "redistribution_policy": "Vendor binaries are not redistributed in the public repository. Only sizes and SHA-256 values are documented.",
+  "official_package": {
+    "listing_url": "https://www.aulastar.com/search.html?typeid=28&method=1&channelid=4&type=sonself&keywords=L99",
+    "direct_zip_url": "https://www.aulastar.com/uploads/soft/20240621/L99%20reset%20firmware%202026.5.25.zip",
+    "filename": "L99 reset firmware 2026.5.25.zip",
+    "size_bytes": 45080624,
+    "sha256": "e854bebb87a592eaa8553dacff103a7ae62007318592cba2159685fbdb3615e3",
+    "release_date_label": "2026-05-25",
+    "url_directory_date_is_not_release_date": true,
+    "discovery_reference": "softce/aula-l99-research docs/recovery.md",
+    "can_reproduce_uarttft_flash_bin": true,
+    "reproduction_method": "softce hash-locked offline extractor (extract_l99_reset_assets.py), read-only, stops if screen EXE SHA differs",
+    "private_backup_recommended": true
+  },
+  "files": [
+    {
+      "name": "L99-reset.zip",
+      "size_bytes": 45080624,
+      "sha256": "e854bebb87a592eaa8553dacff103a7ae62007318592cba2159685fbdb3615e3",
+      "status": "local_ignored_not_redistributed"
+    },
+    {
+      "name": "L99 keyboard Screen reset firmware ... .exe (screen reset EXE)",
+      "size_bytes": 194946048,
+      "sha256": "8d52849afefeadf3a5d28a5e226f2c7a372a9376e1286f35c286d9b820d1ae84",
+      "status": "local_ignored_not_redistributed",
+      "extracts": ["UartTFT-II_Flash.bin", "HFD_Code_V2.2.bin", "HFD_Code_V2.3.bin"]
+    },
+    {
+      "name": "L99 keyboard reset firmware ... .exe (keyboard reset EXE)",
+      "size_bytes": 2213280,
+      "sha256": "0a946a5d41a872f32e3f3cbdd0d73f9dd7058ea17d3f2a89b2b1bf5c3ed6b217",
+      "status": "local_ignored_not_redistributed"
+    },
+    {
+      "name": "HFD_Code_V2.2.bin",
+      "size_bytes": 305800,
+      "sha256": "432e358cac96fb930ab680ada6f953c9005027c58b31b7ee3bb6bc7868ef35cf",
+      "status": "local_ignored_not_redistributed"
+    },
+    {
+      "name": "HFD_Code_V2.3.bin (official)",
+      "size_bytes": 313652,
+      "sha256": "a76806ada9648d2672bbebead8a9bb396c0bc6f3a0a071e22e99001ac3359d03",
+      "status": "local_ignored_not_redistributed"
+    },
+    {
+      "name": "HFD_Code_V2.3.bin (earlier build, same name, different hash)",
+      "size_bytes": 313504,
+      "sha256": "b277823234fcab7137963896493bcb6896fd985fc972354166fcfc584534e37f",
+      "status": "local_ignored_not_redistributed",
+      "note": "Same filename as official V2.3 but different build/hash; identified by hash, not filename"
+    },
+    {
+      "name": "UartTFT-II_Flash.bin (factory reference)",
+      "size_bytes": 127599044,
+      "sha256": "4cb3fa5c77eea973a2b62ca61873f071692694f4c9a1832507fe2c8c9ba582b4",
+      "status": "local_ignored_not_redistributed",
+      "immutable": true
+    },
+    {
+      "name": "patched_UartTFT-II_Flash.bin",
+      "size_bytes": 127599044,
+      "sha256": "315f68d5eda99956eb8bb313c9307fd217c19e4f3575e11628496813a0a4f385",
+      "status": "working_copy_not_redistributed",
+      "patch_scope": "descriptors 341/342 only, equal-size in-place replacement"
+    },
+    {
+      "name": "HFD_ISP_TOOL_V1.31.exe",
+      "size_bytes": 99328,
+      "sha256": "3fd0227368539e4b80a385ea721a1f091d6f22997da24451e2f8248d512ca282",
+      "status": "local_ignored_not_redistributed",
+      "role": "screen ISP tool (UI-only package candidate)"
+    },
+    {
+      "name": "L99 ISP V1.23.exe",
+      "size_bytes": 111008,
+      "sha256": "e849917779505ce97c8bd8cb9323b223f613337524f94b9aaaa9cc617e743ef0",
+      "status": "local_ignored_not_redistributed",
+      "role": "screen ISP tool"
+    },
+    {
+      "name": "Flash.ini",
+      "size_bytes": 1571,
+      "sha256": "e515905c61a6ad99bf96eaac3e24e5cfd21e274c087f9903b14f35ecece21e2c",
+      "status": "local_ignored_not_redistributed",
+      "role": "ISP tool config (JEDEC -> chip mapping)"
+    }
+  ],
+  "ui_only_package": {
+    "required_files": [
+      "HFD_ISP_TOOL_V1.31.exe",
+      "UartTFT-II_Flash.bin"
+    ],
+    "optional_files": [
+      "Flash.ini"
+    ],
+    "excluded_files": [
+      "HFD_Code_V2.2.bin",
+      "HFD_Code_V2.3.bin",
+      "keyboard reset EXE"
+    ],
+    "relative_paths": "all files at package root alongside HFD_ISP_TOOL_V1.31.exe",
+    "exact_construction_verified": false,
+    "confidence": "STRONG_INFERENCE",
+    "absence_of_hfd_files": "softce evidence: UI-only packages exist without HFD_Code; static analysis of both ISP tools references HFD_Code files but does not establish refusal or skip behavior",
+    "updater_rewrites_hfd_before_after_ui": "UNKNOWN",
+    "interrupted_update_can_reenter_isp": {
+      "automatic_software_recovery": "UNKNOWN",
+      "manual_re_entry_into_isp": "STRONG_INFERENCE (official instructions: power cycle, Fn+X→0→6, Fn+Space; one configuration only, not universal)"
+    }
+  },
+  "conclusions": {
+    "exact_files_required_ui_only": ["HFD_ISP_TOOL_V1.31.exe", "UartTFT-II_Flash.bin"],
+    "required_filenames_and_relative_paths": "HFD_ISP_TOOL_V1.31.exe and UartTFT-II_Flash.bin at package root; Flash.ini optional at package root",
+    "flash_ini_required": false,
+    "hfd_files_can_be_omitted": true,
+    "absence_of_hfd_selects_ui_only_or_causes_failure": "STRONG_INFERENCE (softce: UI-only mode); not VERIFIED by static analysis",
+    "updater_rewrites_hfd_before_after_ui": "UNKNOWN",
+    "interrupted_update_can_reenter_isp": "STRONG_INFERENCE manual re-entry; UNKNOWN automatic recovery",
+    "decision": "NO-GO unless exact UI-only package acceptance and ISP re-entry are VERIFIED"
+  }
+}

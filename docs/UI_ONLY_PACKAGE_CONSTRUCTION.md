@@ -37,10 +37,12 @@ Recovered via EVB unpack; 99,328 bytes. Read-only disassembly-level inspection o
 ### Behavior when HFD_Code files are absent
 - Both ISP tools contain string refs to all three files (`UartTFT-II_Flash.bin`, `HFD_Code_V2.2.bin`, `HFD_Code_V2.3.bin`, `Flash.ini`).
 - Whether absence of HFD_Code files causes refusal or is tolerated is **not established** by static analysis (no code path fully confirmed).
+- softce `recovery.md` confirms separate UI packages used `HFD_ISP_TOOL_V1.31.exe` with `UartTFT-II_Flash.bin` without HFD_Code or keyboard MCU files. Absence of HFD files selects UI-only mode per softce evidence (**STRONG_INFERENCE**, not VERIFIED by static analysis).
 
 ### UI-only versus combined-update branches
 - softce `recovery.md` confirms: "Separate UI packages used `HFD_ISP_TOOL_V1.31.exe` with a resource image named `UartTFT-II_Flash.bin`, without HFD_Code or keyboard MCU files. The updater still transfers the entire resource image." → UI-only packages are confirmed to exist.
 - Both tools statically reference all three files, so a combined UI+HFD write is possible; actual write scope per tool is **not established** by static analysis alone.
+- Whether the updater rewrites HFD before/after UI is **UNKNOWN** — no code path establishes HFD write order relative to UI.
 
 ### File-size checks
 - Image size 127,599,044 bytes verified; error strings indicate size enforcement (STRONG_INFERENCE).
@@ -64,7 +66,7 @@ Recovered via EVB unpack; 99,328 bytes. Read-only disassembly-level inspection o
 
 ---
 
-## 3. Does a UI-only package consist exactly of `HFD_ISP_TOOL_V1.31.exe` + `UartTFT-II_Flash.bin` (+ optionally `Flash.ini`), no HFD_Code?
+## 3. Exact UI-only package acceptance conclusion
 
 **Confirmed existence:** UI-only packages are confirmed to exist per softce (updater used with `UartTFT-II_Flash.bin`, without HFD_Code or keyboard MCU files).
 
@@ -84,6 +86,7 @@ So: UI-only package **consists of** `HFD_ISP_TOOL_V1.31.exe` + `UartTFT-II_Flash
 | Writes HFD code before or after UI resources? | Not determined | UNKNOWN |
 | Uses embedded default if a file is missing? | Not established | UNKNOWN |
 | Refuses to start if HFD files absent? | Not established | UNKNOWN |
+| Absence of HFD files selects UI-only mode or causes failure? | softce: UI-only mode (packages existed without HFD_Code); static analysis not conclusive | STRONG_INFERENCE |
 
 ---
 
@@ -137,3 +140,12 @@ Not present as a separately documented mode in this repository. HFD_Code_V2.2/V2
 | HFD V2.2/V2.3 via flash ID `0xEFAA21` | STRONG_INFERENCE |
 | HFD files required vs optional / embedded default | UNKNOWN |
 | Write scope UI-only vs combined HFD | STRONG_INFERENCE (not VERIFIED) |
+| Updater rewrites HFD before/after UI | UNKNOWN |
+| Absence of HFD files selects UI-only mode or causes failure | STRONG_INFERENCE (softce); UNKNOWN (static) |
+| Interrupted update can re-enter ISP | STRONG_INFERENCE manual re-entry; UNKNOWN automatic recovery |
+
+---
+
+## 8. Decision impact
+
+Remain NO-GO unless exact UI-only package acceptance and ISP re-entry are VERIFIED. Exact UI-only package construction is currently STRONG_INFERENCE only; interrupted-write recovery is UNKNOWN.

@@ -70,6 +70,20 @@
 
 **STRONG_INFERENCE.** softce recovery.md confirms separate UI packages used `HFD_ISP_TOOL_V1.31.exe` with `UartTFT-II_Flash.bin` without HFD_Code or keyboard MCU files. However, both ISP tools statically reference all three files (`/UartTFT-II_Flash.bin`, `/HFD_Code_V2.2.bin`, `/HFD_Code_V2.3.bin`), so a combined UI+HFD write is possible. The actual write scope performed by the Screen Reset EXE is not established from static analysis alone.
 
+### Exact UI-only package layout (required filenames and relative paths)
+
+All files at package root alongside `HFD_ISP_TOOL_V1.31.exe`:
+
+| File | Required? | Size (bytes) | SHA-256 |
+|---|---|---:|---|
+| `HFD_ISP_TOOL_V1.31.exe` | Required | 99,328 | `3fd0227368539e4b80a385ea721a1f091d6f22997da24451e2f8248d512ca282` |
+| `UartTFT-II_Flash.bin` | Required | 127,599,044 | `4cb3fa5c77eea973a2b62ca61873f071692694f4c9a1832507fe2c8c9ba582b4` |
+| `Flash.ini` | Optional | 1,571 | `e515905c61a6ad99bf96eaac3e24e5cfd21e274c087f9903b14f35ecece21e2c` |
+
+- `Flash.ini` is **not required** for UI-only mode.
+- `HFD_Code_V2.2.bin` and `HFD_Code_V2.3.bin` **can be omitted**; absence of HFD files selects UI-only mode per softce evidence (**STRONG_INFERENCE**, not VERIFIED by static analysis).
+- The updater rewrites HFD before/after UI: **UNKNOWN** — no code path establishes HFD write order relative to UI.
+
 Exact UI-only package construction is **NOT verified**. Per project decision rules, if exact UI-only package construction is not verified, remain NO-GO.
 
 This remains a blocker: if `HFD_Code` is also rewritten, the patched resource image may be paired with incompatible screen MCU code.
@@ -85,7 +99,14 @@ Whether `UartTFT-II_Flash.bin` contains an additional image-level self-checksum 
 **UNKNOWN.** Timeout string `"Time over!"` exists in both ISP tools, and status strings `"Update flash is OK!!!!!!"` / `"Update flash is fail....."` exist, but no explicit interrupted-write recovery path (resume, re-send, rollback) was found in static analysis of either ISP tool or the Screen Reset EXE.
 
 Automatic software recovery: **UNKNOWN** — no explicit path found.
-Manual re-entry into ISP mode: **STRONG_INFERENCE** — official instructions describe power cycling (switch off/on, unplug/reinsert) and Fn+X→0→6 or Fn+Space entry, but these are observations of one configuration, not verified as universal across hardware revisions.
+Manual re-entry into ISP mode: **STRONG_INFERENCE** — official instructions describe power cycling (switch off/on, unplug/reinsert) and Fn+X→0→6 or Fn+Space entry. softce `recovery.md` notes Fn+X→0→6 did not produce the expected result on their specimen; Fn+Space for approximately five seconds allowed updating to start — an observation of one configuration, not verified as universal across hardware revisions. An interrupted update can re-enter ISP via these manual re-entry paths (**STRONG_INFERENCE**); automatic re-entry/recovery is **UNKNOWN**.
+
+ISP entry, timeout, restart and retry paths:
+- Timeout (`"Time over!"`): STRONG_INFERENCE — string present in both ISP tools; no automatic retry path confirmed.
+- Automatic retry after timeout: NOT_REQUIRED / prohibited — project safety constraint: never auto-retry after timeout.
+- Restart / re-enter ISP mode: STRONG_INFERENCE — official instructions (power cycle, Fn+X→0→6, Fn+Space); one configuration only.
+- Bootloader entry: UNKNOWN — not verified as universal; no bootloader dump.
+- Manual re-entry vs automatic recovery: distinguished — manual re-entry described in official instructions; automatic recovery UNKNOWN.
 
 Residual brick risk: if an interrupted write occurs (timeout, power loss, USB disconnect), there is NO verified recovery path in this repository. Software recovery is limited to restoring files from the official reset package, which is NOT a raw NAND dump and lacks per-device OOB, ECC, bad-block, calibration, and unique-board data. Hardware NAND recovery may be required if software rollback fails. This brick risk is explicit and unrecovered.
 

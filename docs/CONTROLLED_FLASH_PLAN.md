@@ -49,6 +49,20 @@ The official reset package (2026-05-25) is expected to contain:
 - `L99 ISP V1.23.exe` — distinct screen ISP tool, local/ignored only.
 - `official 2026-05-25 screen reset EXE` — the screen-reset payload within the ZIP.
 
+### UI-only package layout (exact required filenames and relative paths)
+
+All files at package root alongside `HFD_ISP_TOOL_V1.31.exe`:
+
+| File | Required? | Size (bytes) | SHA-256 |
+|---|---|---:|---|
+| `HFD_ISP_TOOL_V1.31.exe` | Required | 99,328 | `3fd0227368539e4b80a385ea721a1f091d6f22997da24451e2f8248d512ca282` |
+| `UartTFT-II_Flash.bin` | Required | 127,599,044 | `4cb3fa5c77eea973a2b62ca61873f071692694f4c9a1832507fe2c8c9ba582b4` |
+| `Flash.ini` | Optional | 1,571 | `e515905c61a6ad99bf96eaac3e24e5cfd21e274c087f9903b14f35ecece21e2c` |
+
+- `Flash.ini` is **not required** for UI-only mode.
+- `HFD_Code_V2.2.bin` and `HFD_Code_V2.3.bin` **can be omitted**; absence of HFD files selects UI-only mode per softce evidence (**STRONG_INFERENCE**, not VERIFIED by static analysis).
+- The updater rewrites HFD before/after UI: **UNKNOWN** — no code path establishes HFD write order relative to UI.
+
 Package layout is inferred from `docs/FIRMWARE_PACKAGE_MAP.md`; exact internal structure of the EXE
 containers (Enigma Virtual Box) has not been reverse-engineered in this repository.
 
@@ -88,6 +102,9 @@ containers (Enigma Virtual Box) has not been reverse-engineered in this reposito
 - C16 Version compatibility checks: **STRONG_INFERENCE** — flash-ID-based HFD V2.2/V2.3 selection; About-page V1.31 unresolved (must not be assumed to be screen version).
 - C17 Read-back/post-write verification: **STRONG_INFERENCE** — post-write status messages and "Read fail" string exist; arbitrary flash read-back not established.
 - C18 Recovery after interrupted write: **UNKNOWN** — "Time over!" timeout string exists, but no explicit interrupted-write recovery path found in static analysis.
+- UI-only package construction: **STRONG_INFERENCE** — softce confirms UI-only packages exist; `Flash.ini` optional, HFD_Code can be omitted; exact accepted construction not verified by static analysis.
+- HFD write order before/after UI: **UNKNOWN**.
+- Interrupted update can re-enter ISP: manual re-entry **STRONG_INFERENCE** (official instructions: power cycle, Fn+X→0→6, Fn+Space; one configuration only); automatic recovery **UNKNOWN**.
 
 Remaining unknowns from static analysis:
 

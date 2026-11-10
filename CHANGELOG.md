@@ -1,5 +1,42 @@
 # Changelog
 
+## v0.5.0 - 2026-11-10
+
+### Added
+- Added `docs/VENDOR_FIRMWARE_PROVENANCE.md` — official vendor firmware provenance record: official listing URL, direct ZIP URL, filename, size (45,080,624 bytes), SHA-256 (`e854bebb...`), discovery reference (softce/aula-l99-research docs/recovery.md), note that URL directory `20240621` is not the release date, ZIP can reproduce `UartTFT-II_Flash.bin` via the hash-locked extractor, private backup recommendation, and statement that vendor binaries are not redistributed in the public repository.
+- Added `vendor/vendor_files_manifest.json` — vendor file manifest (sizes and SHA-256 only; binaries not redistributed). Records official package, all vendor files with hashes, exact UI-only package layout (`HFD_ISP_TOOL_V1.31.exe` + `UartTFT-II_Flash.bin` at package root, `Flash.ini` optional, HFD_Code files can be omitted), HFD optional/required conclusion, interrupted-write recovery conclusion, and decision.
+- Added exact UI-only package construction conclusions to `docs/UI_ONLY_PACKAGE_CONSTRUCTION.md`: required filenames and relative paths, `Flash.ini` not required, HFD_Code files can be omitted, absence of HFD files selects UI-only mode per softce (STRONG_INFERENCE, not VERIFIED), HFD write order before/after UI UNKNOWN, interrupted update can re-enter ISP via manual re-entry (STRONG_INFERENCE) / automatic recovery UNKNOWN.
+- Updated `docs/RECOVERY_COMPATIBILITY_MATRIX.md` — UI-only package layout table, interrupted-write recovery conclusion with ISP entry/timeout/restart/retry paths, manual re-entry vs automatic recovery distinguished.
+- Updated `docs/CONTROLLED_FLASH_PLAN.md` — UI-only package layout section and recovery path conclusions.
+- Updated `docs/PROJECT_HANDOVER.md` — vendor provenance and UI-only package layout references, expanded milestone findings.
+
+### Changed
+- Release bumped to v0.5.0 (was v0.4.1).
+- Decision remains NO-GO unless exact UI-only package acceptance and ISP re-entry are VERIFIED.
+
+### Verified
+- All 96 repo tests pass (`python -m unittest discover -s tests`).
+- py_compile passes on all scripts and tests.
+- Factory `UartTFT-II_Flash.bin` unchanged (SHA-256 `4cb3fa5c...`).
+- No ZIP, EXE, BIN, PNG, or extracted assets added to Git.
+- No live updater folder constructed.
+- Patched BIN unchanged.
+- No global checksum deep scan re-run.
+- NO-GO requirements not weakened.
+
+### Resolved blockers (documentation only)
+- Exact UI-only package layout documented as STRONG_INFERENCE (required: `HFD_ISP_TOOL_V1.31.exe` + `UartTFT-II_Flash.bin`; optional: `Flash.ini`; excluded: HFD_Code files).
+- HFD optional/required conclusion: HFD_Code files can be omitted; absence of HFD files selects UI-only mode per softce (STRONG_INFERENCE); not VERIFIED by static analysis.
+- Updater rewrites HFD before/after UI: UNKNOWN.
+- Interrupted-write recovery: automatic software recovery UNKNOWN; manual re-entry into ISP STRONG_INFERENCE (official instructions: power cycle, Fn+X→0→6, Fn+Space; one configuration only, not universal).
+- Vendor firmware provenance documented (listing URL, direct ZIP URL, filename, size, SHA-256, URL directory date != release date, hash-locked extractor reproduction, private backup recommendation, no redistribution).
+
+### Remaining blockers (critical)
+- Image-level self-checksum within `UartTFT-II_Flash.bin`: UNKNOWN (per-packet CRC verified; image-level self-checksum not located).
+- Exact UI-only package acceptance: STRONG_INFERENCE only; not VERIFIED.
+- Recovery behavior after interrupted write: UNKNOWN.
+- Until all critical blockers are VERIFIED, no hardware write is permitted.
+
 ## Unreleased
 
 ### Added

@@ -41,7 +41,9 @@ Keyboard events and screen runtime updates use different paths.
 Public repository files:
 - README.md, CHANGELOG.md, VERSION, .gitignore, LICENSE
 - scripts/ analysis and replay tools
-- docs/ handover, protocol notes, firmware package map, third-party references, and data CSVs
+- docs/ handover, protocol notes, firmware package map, third-party references, vendor provenance, UI-only package construction, recovery compatibility matrix, controlled flash plan, and data CSVs
+- vendor/vendor_files_manifest.json — vendor file manifest (sizes and SHA-256 only; binaries not redistributed)
+- docs/VENDOR_FIRMWARE_PROVENANCE.md — official firmware provenance record
 
 Local ignored artifacts:
 - tools/softce-aula-l99-research/ (softce research checkout)
@@ -52,8 +54,11 @@ Local ignored artifacts:
 - HFD_ISP_TOOL_V1.31.exe, Flash.ini
 - Captures, dumps, decoded assets, virtual environments
 - docs/UI_IMAGE_CHECKSUM_MODEL.md — checksum model of UartTFT-II_Flash.bin (image-level checksum NOT_FOUND / UNKNOWN; structured scan added in scripts/flash_checksum_scanner.py)
-- docs/UI_ONLY_PACKAGE_CONSTRUCTION.md — UI-only vs combined package construction (STRONG_INFERENCE, not verified)
-- docs/PAGE21_FIRST_PATCH_PLAN.md — Page 21 descriptor 341/342 patch plan (equal-size in-place sufficient; image-level checksum blocker open)
+- docs/UI_ONLY_PACKAGE_CONSTRUCTION.md — UI-only vs combined package construction (STRONG_INFERENCE; exact accepted construction NOT verified). Exact UI-only package layout: HFD_ISP_TOOL_V1.31.exe + UartTFT-II_Flash.bin at package root; Flash.ini optional; HFD_Code files can be omitted.
+- docs/VENDOR_FIRMWARE_PROVENANCE.md — official firmware provenance (listing URL, direct ZIP URL, filename, size, SHA-256, URL directory date != release date, ZIP can reproduce UartTFT-II_Flash.bin via hash-locked extractor, private backup recommendation, no vendor binaries redistributed)
+- docs/RECOVERY_COMPATIBILITY_MATRIX.md — recovery and package compatibility matrix (interrupted-write recovery: automatic UNKNOWN, manual re-entry STRONG_INFERENCE)
+- docs/CONTROLLED_FLASH_PLAN.md — controlled flash plan (UI-only package layout included)
+- docs/PAGE21_FIRST_PATCH_PLAN.md — Page 21 return code 0x003B, descriptor 341/342 patch plan. Equal-size (8,978-byte) in-place replacement is structurally sufficient: no descriptor-table, page-table, touch-record, global-metadata, or per-resource-checksum changes required. Image-level checksum blocker remains open.
 
 External third-party repositories (not vendored):
 - https://github.com/softce/aula-l99-research
@@ -216,20 +221,24 @@ Key resolved findings:
 - C8 Size: **VERIFIED** (127,599,044 bytes).
 - C11 CRC: **VERIFIED** (CRC32 reflected IEEE per-packet; FileCRC/FlashCRC strings).
 - C13 Transmission scope: **VERIFIED** (full 127,599,044-byte image transferred).
-- C9 UI-only vs combined HFD write: STRONG_INFERENCE (UI-only packages confirmed; combined possible).
+- C9 UI-only vs combined HFD write: STRONG_INFERENCE (UI-only packages confirmed; combined possible). Exact UI-only package construction NOT verified.
 - C10 HFD V2.2/V2.3 selection: STRONG_INFERENCE (flash-ID `0xEFAA21` selector).
 - C14 Flash-ID/JEDEC: STRONG_INFERENCE (Flash.ini JEDEC→chip mapping).
 - C15 Hardware-ID: STRONG_INFERENCE ("Fail to Connect a 268x device"; Qt5SerialPort VID/PID imports).
 - C16 Image-level self-checksum: UNKNOWN (per-packet CRC verified; image-level self-checksum not located).
 - C17 Post-write read-back: STRONG_INFERENCE (status strings exist; arbitrary read-back not established).
 - C18 Recovery after interrupted write: UNKNOWN.
+- UI-only package layout: HFD_ISP_TOOL_V1.31.exe + UartTFT-II_Flash.bin at package root; Flash.ini optional; HFD_Code files can be omitted (STRONG_INFERENCE).
+- HFD write order before/after UI: UNKNOWN.
+- Interrupted update can re-enter ISP: manual re-entry STRONG_INFERENCE; automatic recovery UNKNOWN.
 
 **Decision: NO-GO.** No hardware write is permitted until all critical blockers are VERIFIED:
 1. Image-level self-checksum requirement.
 2. Write scope confirmed as VERIFIED.
 3. Recovery behavior after interrupted write determined.
+4. Exact UI-only package acceptance VERIFIED.
 
-Next task: Resolve remaining critical blockers offline (image-level self-checksum, write scope, interrupted-write recovery). Do not execute any EXE or connect hardware.
+Next task: Resolve remaining critical blockers offline (image-level self-checksum, write scope, interrupted-write recovery, exact UI-only package acceptance). Do not execute any EXE or connect hardware.
 
 ### 12b. Offline NumPad icon patcher (scripts/patch_l99_numpad_icon.py)
 
