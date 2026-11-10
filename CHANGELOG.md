@@ -1,5 +1,34 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- Corrected structural report for UartTFT-II_Flash.bin completed and independently reviewed.
+- Interval arithmetic independently revalidated against the raw file bytes.
+- Container coverage figures recorded: 70,051,928 bytes covered (54.9000%), 57,547,116 bytes uncovered (45.1000%), total 127,599,044 bytes.
+- Six zero-filled external gaps recorded: [0x00A355EC, 0x04000000) 56,404,500 bytes; [0x0404B00B, 0x04060000) 86,005 bytes; [0x040AB00B, 0x040C0000) 86,005 bytes; [0x0410B00B, 0x041E0000) 872,437 bytes; [0x0422B00B, 0x04240000) 86,005 bytes; [0x05B0D07C, 0x05B10000) 12,164 bytes.
+- Exact semantic coverage remains unknown.
+- Corrected Page 21 boundaries: page record 0x00021ECC, display block [0x00024B7E, 0x00024C4A) 204 bytes, touch block [0x00024C4A, 0x00024DA0) 342 bytes, background descriptor table offset 0x005C018A.
+- Conservative decode-issue conclusion recorded: 26 entries fail bitmap bounds validation, unreferenced, bank-1 counterparts equally invalid; "No evidence was found that these entries corrupt any currently referenced UI asset. Their intended semantics remain unknown."
+- Provenance distinction recorded: matching SHA-256 confirms byte identity, not identical provenance; provenance wording conflict, not structural-data conflict.
+- Executable-code conclusion remains limited: no executable region identified by structural analysis; every byte non-executable and HFD_Code containing all screen-MCU executable code both unverified.
+- Hardware decision remains NO-GO.
+- Next task is native dynamic-widget analysis (display type 3 variable-to-icon selection, display type 5 animation behavior).
+
+## v0.6.2 - 2026-11-10
+
+### Added
+- Firmware upgrade process mapping confirmed via Process Monitor captures for installed Chinese AULA L99 version 1.0.1.4.
+- Main application: `DeviceDriver.exe` (1,837,056 bytes, SHA-256 `DD9C934E2F6F1CC53AE4AFB5B412C3F696CD4D329A03DF28BD151DAB90B3E6B3`), PID 5652 parent for both upgrade entries.
+- Keyboard firmware upgrade: `firmware\L99_中文_V1.31.exe` (2,213,280 bytes, SHA-256 `E316C25591711D1B425E0BB4F17C02813E70AB9D8CD982D91EA331222112276D`), child PID 27840.
+- Screen firmware upgrade: `firmware\L99_ISP_中文完整UI_V1.23_156.exe` (162,852,672 bytes, SHA-256 `0A77055429DA60E35AFE419A367BE1AB987B7E3F4CA3B67477BD017AA097FC55`), child PID 16676.
+- Verified process hierarchy: `DeviceDriver.exe` → keyboard `L99_中文_V1.31.exe` / screen `L99_ISP_中文完整UI_V1.23_156.exe`.
+
+### Safety
+- No firmware upgrade started.
+- No bootloader transition or flash write performed.
+- Read-only analysis only.
+
 ## v0.6.1 - 2026-11-10
 
 ### Corrected
@@ -213,3 +242,29 @@
 - Built-in page/resource table locations within HFD_Code binaries not yet located.
 - Recovery and bootloader procedure not yet established.
 - Exact cause of external author's bricked keyboard remains unproven.
+
+## v0.6.3 - 2026-11-10
+
+### Added
+- Recorded Chinese AULA L99 version 1.0.1.4 as the analysis baseline: only available version known to expose both keyboard firmware upgrade and screen firmware upgrade as separate upgrade paths targeting different controllers; keyboard updater version and screen updater version are not one version sequence.
+- Recorded installed baseline: C:\Program Files (x86)\AULA L99; baseline inventory C:\temp\L99_1.0.1.4_baseline.txt; 212 files inventoried.
+- Recorded DeviceDriver.exe (1,837,056 bytes, SHA-256 DD9C934E2F6F1CC53AE4AFB5B412C3F696CD4D329A03DF28BD151DAB90B3E6B3); Process Monitor confirmed Explorer launched DeviceDriver.exe and DeviceDriver.exe launched both firmware tools.
+- Recorded verified keyboard/screen firmware upgrade mapping (Process Create and Process Start captures, not filename-based assumption): DeviceDriver.exe -> firmware\L99_中文_V1.31.exe (2,213,280 bytes, SHA-256 E316C25591711D1B425E0BB4F17C02813E70AB9D8CD982D91EA331222112276D; keyboard controller USB HID 0C45:800A) and DeviceDriver.exe -> firmware\L99_ISP_中文完整UI_V1.23_156.exe (162,852,672 bytes, SHA-256 0A77055429DA60E35AFE419A367BE1AB987B7E3F4CA3B67477BD017AA097FC55; screen interface EEEF:268A virtual COM; screen controller family under investigation LT268A/LT2686 UartTFT).
+- Recorded screen updater launch-only findings: launched without pressing Start; no firmware upgrade or intentional flash write; nineteen preserved evb*.tmp files, each exactly 1536 bytes, each beginning with an MZ header; strings included "This program must be run under Win32", "ntdll.dll", "ZwOpenFile"; all nineteen files had different SHA-256 hashes; small PE/helper stubs, not complete screen firmware payloads; pattern consistent with an Enigma Virtual Box style virtualized runtime but packer identity not conclusively verified; one zero-byte evb*.tmp remained locked by the running updater and was not forcibly copied; no large firmware image observed extracted into a normal TEMP file.
+- Recorded extraction inventory: HFD_ISP_TOOL_V1.31.exe (99,328 bytes, SHA-256 3FD0227368539E4B80A385EA721A1F091D6F22997DA24451E2F8248D512CA282; matching copies under evbunpack_output and firmware\unpacked); HFD_Code_V2.2.bin (305,800 bytes, SHA-256 432E358CAC96FB930AB680ADA6F953C9005027C58B31B7EE3BB6BC7868EF35CF; matching copies under evbunpack_output, firmware\unpacked, and the local softce working tree); Chinese 1.0.1.4 HFD_Code_V2.3.bin variant (313,504 bytes, SHA-256 B277823234FCAB7137963896493BCB6896FD985FC972354166FCFC584534E37F); other local HFD_Code_V2.3.bin variant (313,652 bytes, SHA-256 A76806ADA9648D2672BBEBEAD8A9BB396C0BC6F3A0A071E22E99001AC3359D03); Flash.ini (1,571 bytes, SHA-256 E515905C61A6AD99BF96EAAC3E24E5CFD21E274C087F9903B14F35ECECE21E2C).
+- Recorded Flash.ini purpose: flash-chip geometry database listing JEDEC IDs, page sizes, page/block counts, and chip models for supported SPI NOR and SPI NAND devices (Winbond, GigaDevice, XTX, Macronix, and related); contains no firmware filenames, no HFD_Code_V2.2.bin/V2.3.bin selection logic, no UartTFT-II_Flash.bin selection logic, no L99 model mapping, no firmware destination addresses, no firmware version-selection rules; not a payload-selection configuration.
+- Recorded verified comparison of the two HFD_Code_V2.3.bin variants: size difference 148 bytes; common prefix 0 bytes; first difference at offset 0x0; differing offsets in overlapping range 286084; common suffix 22 bytes — genuinely different builds or variants, not one file with a simple 148-byte trailer.
+- Corrected and recorded official UartTFT-II_Flash.bin provenance: downloaded directly from the official AULA website during the initial research (127,599,044 bytes, SHA-256 4CB3FA5C77EEA973A2B62CA61873F071692694F4C9A1832507FE2C8C9BA582B4); current local working path tools\softce-aula-l99-research\extracted\UartTFT-II_Flash.bin is only a working location used for analysis and must not be interpreted as file provenance; not extracted from the softce repository, not distributed by the softce repository, not extracted from the Chinese 1.0.1.4 updater, not produced by evbunpack, not recovered from a process memory dump; website URL and exact download timestamp are not claimed as known.
+- Recorded softce research context: softce documentation reports modifying resources, page descriptions, and touch records in a file named UartTFT-II_Flash.bin; softce repository does not distribute complete factory or modified BIN files; local official UartTFT-II_Flash.bin was copied into the softce working directory for analysis; local directory path must not be used to infer provenance.
+- Recorded official full-flash sample comparison: read-only raw containment test between L99_ISP_中文完整UI_V1.23_156.exe and official UartTFT-II_Flash.bin returned FULL_RAW_MATCH: NO; the official UartTFT-II_Flash.bin is not stored verbatim as one contiguous uncompressed block inside the Chinese 1.0.1.4 screen updater; this does not invalidate official provenance; possible explanations (compressed or encrypted storage, Enigma virtual-file packaging, segmented storage, runtime reconstruction, different official builds or delivery packages) remain unproven.
+- Added completed-work, do-not-repeat, unresolved-questions, safety-status, next-planned-task, and scanner-requirements sections to docs/PROJECT_HANDOVER.md, including a pasteable new-chat starting prompt.
+
+### Corrected
+- UartTFT-II_Flash.bin provenance corrected: official AULA website download; the local softce working-directory path under tools\softce-aula-l99-research\extracted\ must not be interpreted as file provenance, and no claim is made that the file came from softce, evbunpack, the Chinese 1.0.1.4 updater, or a process memory dump.
+
+### Safety
+- Firmware work remains read-only. Do not press Start in either updater. Do not flash either HFD_Code_V2.3.bin variant. Do not write the official UartTFT-II_Flash.bin. Do not enter bootloader mode solely for experimentation. Do not replay upgrade traffic. Do not modify updater executables. Do not treat the existence of an official image as proof that recovery is safe. Brick risk remains material until flash layout, validation logic, write sequence, and recovery method are verified.
+
+### Verified
+- git diff -- CHANGELOG.md docs/PROJECT_HANDOVER.md reviewed.
+- All required hashes, verified mappings, corrections, and safety status present in updated documentation; all newly added content is English only.

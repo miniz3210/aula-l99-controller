@@ -420,3 +420,361 @@ python scripts/flash_checksum_scanner.py tools/softce-aula-l99-research/extracte
 
 Prints phase name, progress, elapsed time, full-image pass count, worker count,
 and cache hit/miss. A configurable `--max-runtime` guard stops deep mode cleanly.
+
+## 17. Current baseline
+
+Product: Chinese AULA L99 version 1.0.1.4
+Install directory: C:\Program Files (x86)\AULA L99
+Baseline inventory: C:\temp\L99_1.0.1.4_baseline.txt
+Files inventoried: 212
+Main application: DeviceDriver.exe — 1,837,056 bytes, SHA-256 DD9C934E2F6F1CC53AE4AFB5B412C3F696CD4D329A03DF28BD151DAB90B3E6B3
+Process Monitor confirmed that Explorer launched DeviceDriver.exe and that DeviceDriver.exe launched both firmware tools.
+
+Chinese version 1.0.1.4 is the analysis baseline because it is currently the only available version known to expose both keyboard firmware upgrade and screen firmware upgrade. These must always be treated as separate upgrade paths targeting different controllers. Do not compare the keyboard updater version and the screen updater version as if they are part of one version sequence.
+
+## 18. Verified controller and updater separation
+
+Keyboard firmware upgrade — verified by separate Process Create and Process Start captures, not a filename-based assumption:
+- Parent: DeviceDriver.exe
+- Child: C:\Program Files (x86)\AULA L99\firmware\L99_中文_V1.31.exe — 2,213,280 bytes, SHA-256 E316C25591711D1B425E0BB4F17C02813E70AB9D8CD982D91EA331222112276D
+- Target path: keyboard firmware/controller path; known keyboard controller: USB HID 0C45:800A
+
+Screen firmware upgrade — verified by separate Process Create and Process Start captures, not a filename-based assumption:
+- Parent: DeviceDriver.exe
+- Child: C:\Program Files (x86)\AULA L99\firmware\L99_ISP_中文完整UI_V1.23_156.exe — 162,852,672 bytes, SHA-256 0A77055429DA60E35AFE419A367BE1AB987B7E3F4CA3B67477BD017AA097FC55
+- Target path: screen firmware/ISP path; known screen interface: EEEF:268A virtual COM; known screen controller family under investigation: LT268A/LT2686 UartTFT
+
+Keyboard controller firmware and screen-controller firmware are distinct upgrade paths and must never be merged.
+
+## 19. Verified file identities
+
+- DeviceDriver.exe: 1,837,056 bytes, SHA-256 DD9C934E2F6F1CC53AE4AFB5B412C3F696CD4D329A03DF28BD151DAB90B3E6B3
+- L99_中文_V1.31.exe: 2,213,280 bytes, SHA-256 E316C25591711D1B425E0BB4F17C02813E70AB9D8CD982D91EA331222112276D
+- L99_ISP_中文完整UI_V1.23_156.exe: 162,852,672 bytes, SHA-256 0A77055429DA60E35AFE419A367BE1AB987B7E3F4CA3B67477BD017AA097FC55
+- HFD_ISP_TOOL_V1.31.exe: 99,328 bytes, SHA-256 3FD0227368539E4B80A385EA721A1F091D6F22997DA24451E2F8248D512CA282; matching copies exist under evbunpack_output and firmware\unpacked
+- HFD_Code_V2.2.bin: 305,800 bytes, SHA-256 432E358CAC96FB930AB680ADA6F953C9005027C58B31B7EE3BB6BC7868EF35CF; matching copies exist under evbunpack_output, firmware\unpacked, and the local softce working tree
+- Chinese 1.0.1.4 HFD_Code_V2.3.bin variant: 313,504 bytes, SHA-256 B277823234FCAB7137963896493BCB6896FD985FC972354166FCFC584534E37F
+- Other local HFD_Code_V2.3.bin variant: 313,652 bytes, SHA-256 A76806ADA9648D2672BBEBEAD8A9BB396C0BC6F3A0A071E22E99001AC3359D03
+- Flash.ini: 1,571 bytes, SHA-256 E515905C61A6AD99BF96EAAC3E24E5CFD21E274C087F9903B14F35ECECE21E2C — flash-chip geometry database (JEDEC IDs, page sizes, page/block counts, chip models for Winbond, GigaDevice, XTX, Macronix, and related devices); contains no firmware filenames, no HFD selection logic, no UartTFT-II_Flash.bin selection logic, no L99 model mapping, no destination addresses, no version-selection rules; not a payload-selection configuration
+- UartTFT-II_Flash.bin: 127,599,044 bytes, SHA-256 4CB3FA5C77EEA973A2B62CA61873F071692694F4C9A1832507FE2C8C9BA582B4
+
+Same-named firmware files may contain different builds and must be identified by hash, not filename. The two V2.3 files are genuinely different builds/variants: size difference 148 bytes, common prefix 0 bytes, first difference at offset 0x0, differing offsets in overlapping range 286084, common suffix 22 bytes.
+
+## 20. Official UartTFT-II_Flash.bin provenance
+
+- File: UartTFT-II_Flash.bin
+- Size: 127,599,044 bytes
+- SHA-256: 4CB3FA5C77EEA973A2B62CA61873F071692694F4C9A1832507FE2C8C9BA582B4
+- Size (hexadecimal): 0x079B01C4
+- Provenance: downloaded directly from the official AULA website during the initial research.
+- Current local working path: tools\softce-aula-l99-research\extracted\UartTFT-II_Flash.bin (working location only; not file provenance).
+
+It was not extracted from the softce repository, not distributed by the softce repository, not extracted from the Chinese 1.0.1.4 updater, not produced by evbunpack, and not recovered from a process memory dump. The directory path under the softce working tree must not be interpreted as file provenance. The website URL and exact download timestamp are not known from repository artifacts and must not be claimed.
+
+Provenance wording conflict: softce documentation describes its hash-matching copy as extracted from a 2026.5.25 reset package. Matching SHA-256 confirms byte identity between the two accounts but does not prove identical provenance. This is a provenance wording conflict, not a structural-data conflict.
+
+## 21. Completed work
+
+- Chinese 1.0.1.4 selected as the baseline.
+- Complete 212-file installed-directory inventory created.
+- Main executable identified and hashed.
+- Keyboard and screen upgrade UI entries mapped to their real child executables.
+- Both updater executables sized and hashed.
+- Screen updater launch-only behavior inspected without pressing Start.
+- EVB-style temporary PE stubs preserved and inspected.
+- Existing extracted ISP tool, V2.2, V2.3, and Flash.ini inventoried.
+- Flash.ini purpose identified as a flash-chip geometry database.
+- Two V2.3 variants compared and proven substantially different.
+- Official UartTFT-II_Flash.bin provenance corrected to an official AULA website download.
+- Raw full-file containment test performed against the Chinese 1.0.1.4 screen updater: FULL_RAW_MATCH: NO.
+- No firmware flash or intentional write performed during this work.
+
+## 22. Key findings
+
+- Keyboard and screen updater mappings are verified by Process Create and Process Start captures; they are not filename-based assumptions. Keyboard targets USB HID 0C45:800A; screen targets EEEF:268A virtual COM (LT268A/LT2686 UartTFT family under investigation).
+- The screen updater was launched without pressing its Start button. Nineteen evb*.tmp files were preserved, each exactly 1536 bytes, each beginning with an MZ header, with strings including "This program must be run under Win32", "ntdll.dll", and "ZwOpenFile"; all nineteen had different SHA-256 hashes. They are small PE/helper stubs, not complete screen firmware payloads.
+- Flash.ini is a flash-chip geometry database, not a payload-selection configuration.
+- The two HFD_Code_V2.3.bin variants are genuinely different builds (148-byte size difference; 0-byte common prefix; first difference at offset 0x0; 286084 differing offsets in overlapping range; 22-byte common suffix).
+- The official UartTFT-II_Flash.bin is not stored verbatim as one contiguous uncompressed block inside the Chinese 1.0.1.4 screen updater (raw containment test: FULL_RAW_MATCH: NO). Possible explanations (compressed or encrypted storage, Enigma virtual-file packaging, segmented storage, runtime reconstruction, different official builds) remain unproven.
+- UartTFT-II_Flash.bin is an official AULA website download; its current path under the softce working directory conveys no provenance.
+
+## 23. Important corrections
+
+- UartTFT-II_Flash.bin provenance: official AULA website download, not a softce repository file, not distributed by softce, not extracted from the Chinese 1.0.1.4 updater, not produced by evbunpack, and not recovered from a process memory dump. The path tools\softce-aula-l99-research\extracted\UartTFT-II_Flash.bin is only a local working location.
+- The two HFD_Code_V2.3.bin files are different builds/variants, not one file with a simple 148-byte trailer.
+- Flash.ini is not a payload-selection configuration.
+
+## 24. Unresolved questions
+
+1. Determine the exact structural relationship between the official UartTFT-II_Flash.bin and the Chinese 1.0.1.4 screen updater.
+2. Determine whether the updater contains the same logical full-flash content in compressed, encrypted, segmented, virtualized, or reconstructed form.
+3. Identify which screen-controller firmware component is represented by HFD_Code_V2.2.bin, Chinese 1.0.1.4 HFD_Code_V2.3.bin, and the other V2.3 variant.
+4. Determine how HFD_ISP_TOOL_V1.31.exe selects a firmware payload.
+5. Identify the exact flash layout and resource-region boundaries inside the official UartTFT-II_Flash.bin.
+6. Separate executable screen-controller firmware from UI resources, page descriptions, images, fonts, language assets, and touch-zone records.
+7. Determine whether a verified read-back and recovery path exists before any modified image is written.
+8. Preserve the distinction between keyboard controller firmware, screen-controller executable firmware, full screen flash/resource image, normal photo-frame framebuffer upload, and HID Feature Report updates used by built-in widgets.
+
+## 25. Do not repeat
+
+A new chat must not repeat the following unless new evidence makes it necessary:
+
+- baseline inventory
+- updater SHA256 collection
+- Process Monitor child-process mapping
+- launch-only screen updater capture
+- generic strings scan of the 162 MB updater
+- idle memory dump
+- generic Enigma detection
+- extraction of HFD_ISP_TOOL_V1.31.exe
+- extraction of HFD_Code_V2.2.bin
+- extraction of the local Chinese 1.0.1.4 HFD_Code_V2.3.bin
+- analysis of Flash.ini as a chip database
+- comparison proving that the two V2.3 files are different
+- raw full-file search for UartTFT-II_Flash.bin inside the updater
+- investigation of the nineteen 1536-byte evb*.tmp files as possible firmware payloads
+- attempts to prove UartTFT-II_Flash.bin provenance from its current softce working-directory path
+
+## 26. Safety constraints
+
+- Firmware work remains read-only.
+- Do not press Start in either updater.
+- Do not flash either HFD_Code_V2.3.bin variant.
+- Do not write the official UartTFT-II_Flash.bin.
+- Do not enter bootloader mode solely for experimentation.
+- Do not replay upgrade traffic.
+- Do not modify updater executables.
+- Do not treat the existence of an official image as proof that recovery is safe.
+- Brick risk remains material until flash layout, validation logic, write sequence, and recovery method are verified.
+
+## 27. Next planned task
+
+Read-only analysis of the native dynamic widget model, focusing on display type 3 variable-to-icon selection and display type 5 animation behavior, to determine whether Page 21 can support Stream Deck-style runtime state feedback without changing touch records or repeatedly writing resource flash.
+
+Later analysis should determine:
+- runtime variable addresses used by type 3 widgets
+- icon-range selection behavior
+- min/max value behavior
+- existing pages that demonstrate runtime icon switching
+- type 5 start, stop, loop, and frame-selection behavior
+- whether Page 21 can reuse an existing volatile RAM variable
+- whether Companion feedback can be mapped to native L99 icon states
+
+Do not begin this dynamic-widget task now.
+
+## 28. Scanner performance requirements
+
+If new scanning code is required, it must include:
+
+- quick and deep modes
+- a quick-mode target under 30 seconds
+- a deep-result cache keyed by source hash, patched hash when applicable, scanner version, algorithms, and region map
+- native CRC implementations
+- multiprocessing across independent jobs
+- no full-region rescan for every candidate
+- mmap or memoryview access
+- progress reporting
+- phase timings
+- deterministic machine-readable output
+
+These scanner requirements and current findings must also remain recorded in docs/PROJECT_HANDOVER.md for new-chat continuity.
+
+## 29. New-chat starting prompt
+
+Paste the following into a new chat:
+
+```
+Read docs/PROJECT_HANDOVER.md first, then read the latest CHANGELOG.md entry. Preserve all verified findings: Chinese AULA L99 version 1.0.1.4 is the analysis baseline (install directory C:\Program Files (x86)\AULA L99, 212-file inventory at C:\temp\L99_1.0.1.4_baseline.txt, DeviceDriver.exe 1,837,056 bytes SHA-256 DD9C934E2F6F1CC53AE4AFB5B412C3F696CD4D329A03DF28BD151DAB90B3E6B3). Keep keyboard and screen firmware upgrade paths strictly separate; they target different controllers and are not one version sequence.
+
+Verified identities to preserve: DeviceDriver.exe SHA-256 DD9C934E2F6F1CC53AE4AFB5B412C3F696CD4D329A03DF28BD151DAB90B3E6B3; keyboard updater L99_中文_V1.31.exe (2,213,280 bytes, SHA-256 E316C25591711D1B425E0BB4F17C02813E70AB9D8CD982D91EA331222112276D, USB HID 0C45:800A); screen updater L99_ISP_中文完整UI_V1.23_156.exe (162,852,672 bytes, SHA-256 0A77055429DA60E35AFE419A367BE1AB987B7E3F4CA3B67477BD017AA097FC55, EEEF:268A virtual COM, LT268A/LT2686 UartTFT family under investigation); HFD_ISP_TOOL_V1.31.exe SHA-256 3FD0227368539E4B80A385EA721A1F091D6F22997DA24451E2F8248D512CA282; HFD_Code_V2.2.bin SHA-256 432E358CAC96FB930AB680ADA6F953C9005027C58B31B7EE3BB6BC7868EF35CF; the two HFD_Code_V2.3.bin variants B2778232... (313,504 bytes) and A76806AD... (313,652 bytes) are genuinely different builds; Flash.ini SHA-256 E515905C61A6AD99BF96EAAC3E24E5CFD21E274C087F9903B14F35ECECE21E2C is a flash-chip geometry database, not a payload-selection configuration.
+
+UartTFT-II_Flash.bin (127,599,044 bytes, SHA-256 4CB3FA5C77EEA973A2B62CA61873F071692694F4C9A1832507FE2C8C9BA582B4) was downloaded directly from the official AULA website during initial research. Its current local path tools\softce-aula-l99-research\extracted\UartTFT-II_Flash.bin is only a working location, not provenance. Do not claim it came from softce or evbunpack, and do not claim the website URL or download timestamp is known. Raw containment test inside the Chinese 1.0.1.4 screen updater returned FULL_RAW_MATCH: NO; explanations remain unproven.
+
+Keep all work read-only. Do not press Start in either updater. Do not flash either HFD_Code_V2.3.bin variant. Do not write the official UartTFT-II_Flash.bin. Do not enter bootloader mode for experimentation. Do not replay upgrade traffic. Do not modify updater executables.
+
+Do not repeat completed work unless new evidence requires it: baseline inventory, updater SHA256 collection, Process Monitor child-process mapping, launch-only screen updater capture, generic strings scan of the 162 MB updater, idle memory dump, generic Enigma detection, extraction of HFD_ISP_TOOL_V1.31.exe, extraction of HFD_Code_V2.2.bin, extraction of the local Chinese 1.0.1.4 HFD_Code_V2.3.bin, Flash.ini chip-database analysis, V2.3 difference comparison, raw full-file search for UartTFT-II_Flash.bin inside the updater, investigation of the nineteen 1536-byte evb*.tmp files as firmware payloads, or provenance claims from the softce working-directory path.
+
+Begin with read-only structural analysis of the official UartTFT-II_Flash.bin to produce a verified region map (offsets, lengths, signatures or magic values, image/resource regions, page-description records, touch-record areas, string/font/language regions, executable-code candidates, checksums or validation fields, erased or padding regions). Inspect existing softce repository documentation and tools for commands that already parse UartTFT-II_Flash.bin before creating new scripts; exclude .venv, __pycache__, node_modules, binary captures, large dumps, and generated output directories from broad searches. Present the next command before moving forward. Explicitly distinguish facts, hypotheses, and unverified assumptions in every response.
+```
+
+## 30. Corrected structural findings — UartTFT-II_Flash.bin (independently reviewed and corrected)
+
+### Source identity and provenance
+
+- Official UartTFT-II_Flash.bin
+- Size: 127,599,044 bytes
+- Hexadecimal size: 0x079B01C4
+- SHA-256: 4CB3FA5C77EEA973A2B62CA61873F071692694F4C9A1832507FE2C8C9BA582B4
+- Current local working path: tools\softce-aula-l99-research\extracted\UartTFT-II_Flash.bin (working location only; not file provenance).
+- Provenance wording conflict: softce documentation describes its hash-matching copy as extracted from a 2026.5.25 reset package; this project records the current official file as downloaded directly from the official AULA website during initial research. Matching SHA-256 confirms byte identity, not identical provenance. This is a provenance wording conflict, not a structural-data conflict.
+
+### Corrected structural findings — VERIFIED
+
+1. Four known top-level UI project containers:
+   - [0x00000000, 0x00A355EC)
+   - [0x05B10000, 0x065455EC)
+   - [0x065455EC, 0x06F7ABD8)
+   - [0x06F7ABD8, 0x079B01C4)
+
+2. The final three UI projects are byte-identical.
+
+3. The final project ends exactly at EOF.
+
+4. The final three projects must not be described as guaranteed recovery copies.
+
+5. Correct page table:
+   - start: 0x00021DD0
+   - 30 records
+   - 12 bytes per record
+   - size: 360 bytes / 0x168
+   - end: 0x00021F38
+
+6. Correct background descriptor table:
+   - start: 0x005C008E
+   - 30 records
+   - 12 bytes per record
+   - size: 360 bytes / 0x168
+
+7. Correct icon descriptor banks:
+   - 569 descriptors per bank
+   - 12 bytes per descriptor
+   - 6,828 bytes / 0x1AAC per bank
+   - bank 0: [0x00622A84, 0x00624530)
+   - bank 1: [0x00624530, 0x00625FDC)
+
+8. Four standalone user-image structures and the startup animation are structurally verified.
+
+9. Startup animation end:
+   - 0x05B0D07C
+   - 95,473,788 decimal
+
+### Container coverage — VERIFIED
+
+- container-covered: 70,051,928 bytes / 54.9000%
+- container-uncovered: 57,547,116 bytes / 45.1000%
+- total: 127,599,044 bytes
+
+This is container coverage, not exact semantic coverage.
+
+"Exact semantic coverage is not currently established." Do not claim that every byte inside a known UI project has understood semantics.
+
+### Zero-filled external gaps — VERIFIED
+
+All six gaps outside the known top-level containers are zero-filled:
+
+1. [0x00A355EC, 0x04000000) — 56,404,500 bytes
+2. [0x0404B00B, 0x04060000) — 86,005 bytes
+3. [0x040AB00B, 0x040C0000) — 86,005 bytes
+4. [0x0410B00B, 0x041E0000) — 872,437 bytes
+5. [0x0422B00B, 0x04240000) — 86,005 bytes
+6. [0x05B0D07C, 0x05B10000) — 12,164 bytes
+
+"Do not state: 'No unexplained non-padding data exists.'"
+
+### Page 21 verified boundaries
+
+- page record: 0x00021ECC
+- display block: [0x00024B7E, 0x00024C4A) — 204 bytes
+- touch block: [0x00024C4A, 0x00024DA0) — 342 bytes
+- background descriptor table offset: 0x005C018A
+- calculation: 0x005C008E + (21 * 12)
+- Page 21 referenced icon IDs: 1-9, 13, 14, 20, 21, 119, 318-352
+
+Background descriptor (carefully recorded):
+- raw descriptor: 368461004001e00100000010
+- address: 0x00618436
+- dimensions: 320 x 480
+- parsed size: 0
+- parsed format: 16
+
+Its exact semantics remain UNVERIFIED and it must not be treated as a normal RGB565, ARGB4444, or LT bitmap descriptor without additional evidence.
+
+The safest currently verified Page 21 offline modification boundary remains equal-size in-place replacement of verified icon payload allocations, including the already documented icon allocations such as IDs 341 and 342.
+
+VERIFIED:
+- equal-size in-place replacement can remain inside existing verified payload allocations
+- existing Page 21 touch records can remain unchanged
+- descriptor-table changes are not required for the verified equal-size workflow
+- offline diff confinement can be independently validated
+
+UNVERIFIED:
+- image-level self-checksum behavior
+- updater acceptance of a modified package
+- full updater write scope
+- interrupted-write recovery
+- hardware safety
+
+### Decode issues
+
+VERIFIED:
+- 26 entries fail bitmap bounds validation
+- they are unreferenced by known page, display, or touch records
+- corresponding entries in the other icon bank are also invalid
+- neighboring descriptors do not show table-wide parser desynchronization
+- no currently referenced UI asset depends on them
+
+HYPOTHESES:
+- reserved slots
+- overloaded metadata
+- intentionally invalid entries
+- non-bitmap records stored in descriptor slots
+
+"No evidence was found that these entries corrupt any currently referenced UI asset. Their intended semantics remain unknown." Do not state that they are definitively not corruption.
+
+### Executable-code assessment
+
+VERIFIED:
+- no executable region was identified by the corrected structural analysis
+- parsed structures are consistent with resource data
+- all gaps outside known top-level containers are zero-filled
+
+UNVERIFIED:
+- that every byte in UartTFT-II_Flash.bin is non-executable
+- that HFD_Code_V2.2.bin and HFD_Code_V2.3.bin independently contain all screen-MCU executable code
+
+The HFD executable-code attribution currently comes from softce documentation and has not been independently established by this structural report.
+
+### Safety decision
+
+Hardware decision remains NO-GO.
+
+Do not:
+- start either firmware updater
+- press Start
+- flash any BIN
+- enter bootloader mode
+- replay upgrade traffic
+- modify an updater
+- assume the official image guarantees recovery
+- recommend a hardware write
+
+### Checksum work
+
+Do not recommend rerunning scripts\flash_checksum_scanner.py. The quick/deep checksum investigation is already completed and documented. The image-level self-checksum remains UNKNOWN.
+
+### Next planned task
+
+"Read-only analysis of the native dynamic widget model, focusing on display type 3 variable-to-icon selection and display type 5 animation behavior, to determine whether Page 21 can support Stream Deck-style runtime state feedback without changing touch records or repeatedly writing resource flash."
+
+The analysis should later determine:
+- runtime variable addresses used by type 3 widgets
+- icon-range selection behavior
+- min/max value behavior
+- existing pages that demonstrate runtime icon switching
+- type 5 start, stop, loop, and frame-selection behavior
+- whether Page 21 can reuse an existing volatile RAM variable
+- whether Companion feedback can be mapped to native L99 icon states
+
+Do not begin this dynamic-widget task now.
+
+### Companion direction
+
+Future integration direction:
+- Bitfocus Companion is the preferred first external platform
+- first milestone is input-only integration
+- existing Mini Numpad HID events can trigger Companion actions through a local bridge
+- initial proof of concept must not require firmware modification or flashing
+- bidirectional feedback depends on the dynamic-widget analysis
+- OpenDeck remains a later-stage option because it would require a thicker device/rendering adapter
+
+Do not implement Companion or OpenDeck integration in this task.
