@@ -16,7 +16,9 @@ This is an active reverse-engineering and prototyping project. The present miles
 - No modified resource image has been flashed.
 - Current hardware-write status remains blocked pending offline patch validation and recovery review.
 
-## Goal
+## Goal / Project objective
+
+Open-source AULA L99 screen/controller research aimed at turning the built-in 320x480 touchscreen into a Stream Deck-style control surface. The approach is firmware-free (input bridge first), safety-first and read-only by default. Native page/widget and runtime-feedback research is documented separately; no hardware write is permitted under the current NO-GO decision.
 
 - Turn the AULA L99 320x480 touchscreen into a Stream Deck-style controller.
 - Preserve the stock touch-to-keyboard logic where practical.
@@ -155,7 +157,17 @@ Next transport milestone:
 - Do not use Zadig, WinUSB, or libusbK in the first implementation.
 - On any write timeout, stop and require a device power cycle before another live test.
 
-## Safety policy
+## Safety status
+
+HARDWARE WRITE STATUS: NO-GO
+
+Unresolved:
+- exact user-unit screen-controller revision
+- HFD Code V2.3 architecture fingerprint
+- modified-resource acceptance
+- full updater write scope
+- interrupted-write recovery
+- independent verification of third-party recovery claims
 
 - Original vendor images are immutable local references.
 - No firmware write from this repository should be treated as safe by default.
@@ -247,3 +259,44 @@ Local and ignored only: official firmware, captures, dumps, decoded assets, rese
 - mos9527/evbunpack for Enigma Virtual Box extraction work.
 
 Do not imply that third-party firmware or artwork is licensed by this repository.
+
+## Current verified capabilities
+
+- Wired Raw Input attribution for VID 0C45 / PID 800A / MI_00
+- make-code-based screen Numpad mapping
+- Num Lock-independent mapping design
+- deterministic short/hold state machine
+- dry-run provider architecture
+- official UI widget crosswalk for icon, GIF, keyboard-key, page and variable concepts
+- no claim that modified firmware has been safely flashed
+
+## Evidence and provenance
+
+All findings are classified by evidence category:
+
+**A. User-unit verified** — Directly observed on the user's own AULA L99, official files held by the user, or captures produced from that unit. Examples: wired Raw Input attribution for VID 0C45 / PID 800A / MI_00, factory UartTFT-II_Flash.bin size and SHA-256, HFD_Code_V2.2.bin and HFD_Code_V2.3.bin sizes and hashes, Page 21 Mini Numpad descriptor mapping, offline descriptor/patch tool round-trip validation.
+
+**B. AULA vendor artifacts verified** — Derived from official AULA applications, installers, firmware packages, updaters, or official download sources. Examples: official reset package hash, official UartTFT-II_Flash.bin download, DeviceDriver.exe and ISP updater process hierarchy, Flash.ini flash-chip geometry database.
+
+**C. Levetop official reference** — Derived from official Levetop documentation, LT168B SDK, LT168B MCU SDK, UI_Editor-II examples, or official compiled reference artifacts. Examples: LT168/UartTFT ecosystem compatibility, official widget families (icon, GIF, keyboard-key, page, variable), official LT168 memory map, startup/vector model, W25N01GV driver, compiled reference artifacts, official example supporting at least 90 pages, widget WriteAddr operations and system page switching through 0x7000.
+
+**D. Public teardown evidence** — Derived from a publicly available AULA L99 teardown/review sample, not from the user's own keyboard. Examples: HFD168BDP screen controller marking, HFD80CP100 keyboard MCU, Winbond external memory, reported GT911 touch controller.
+
+**E. Third-party research** — Derived from gavindi/Aula_L99_Linux or kei825/aula-l99-screen-fw. Categories D and E are never presented as direct evidence from the user's own unit.
+
+## Primary external references
+
+- **Levetop LT168 product documentation and official SDK/UI_Editor-II materials** — Official LT168/UartTFT reference ecosystem. Used for: official UI widget crosswalk (icon, GIF, keyboard-key, page, variable concepts), LT168 memory map, startup/vector model, W25N01GV driver, compiled reference artifacts, widget WriteAddr operations, system page switching through 0x7000, official example supporting at least 90 pages.
+
+- **https://github.com/gavindi/Aula_L99_Linux/** — Provides substantial reverse engineering of keyboard HID protocol, RTC/system-monitor packets, screen image/GIF upload, serial transfer behavior, and Linux-side tooling. Its historical LT7689 wording is an engine-lineage or historical hypothesis, not confirmed chip identity, and is not adopted as confirmed for this project. Third-party real-hardware claims have not been independently reproduced on the user's unit.
+
+- **https://github.com/kei825/aula-l99-screen-fw/** — Provides M*Core disassembler/emulator, stock HFD Code V2.2 emulation claims, LT168 MMIO model, GT911, W25N01GV, SCI1 and LCD models, custom 4x4 deck design, PC-side serial deck implementation, and detailed hardware/firmware notes. The repository omits proprietary Levetop engine/SDK components and cannot be treated as a standalone reproducible firmware build. No third-party firmware should be flashed without independent compatibility and recovery verification.
+
+## Hardware identity
+
+- A public AULA L99 teardown sample shows an HFD168BDP screen controller, HFD80CP100 keyboard MCU, Winbond external memory, and a reported GT911 touch controller. This is public teardown evidence, not from the user's keyboard.
+- The user's own unit has not been physically opened.
+- The user's firmware/resource artifacts show strong compatibility with the Levetop LT168/UartTFT ecosystem.
+- Exact silicon identity and hardware revision of the user's unit remain unverified.
+
+Do not state: the user's unit physically contains HFD168BDP; HFD168BDP is definitively identical to Levetop LT168B; the user's flash is definitively W25N01GV; the user's panel controller is definitively ST7796S.

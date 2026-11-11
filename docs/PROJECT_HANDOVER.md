@@ -778,3 +778,147 @@ Future integration direction:
 - OpenDeck remains a later-stage option because it would require a thicker device/rendering adapter
 
 Do not implement Companion or OpenDeck integration in this task.
+
+## External Research Reconciliation and New-Chat Handover
+
+### 1. Current repository state and latest relevant commit
+
+- Repository: C:\temp\aula-l99-controller
+- Branch: main
+- Remote: miniz3210/aula-l99-controller.git
+- Latest commit: 6ed268d "Add firmware-free AULA input bridge prototype"
+- Working tree: clean
+- Vendor binaries and extracted artifacts are local only and ignored by Git.
+
+### 2. What has been completed
+
+- Factory screen resource image extracted and hash-verified (UartTFT-II_Flash.bin, 127,599,044 bytes, SHA-256 4cb3fa5c...).
+- HFD_Code_V2.2.bin (305,800 bytes, SHA-256 432e358c...) and HFD_Code_V2.3.bin (313,652 bytes, SHA-256 a76806ad...) identified and hashed.
+- Factory UI parsed: 30 pages, 385 display records, 187 touch records, 1138 icon descriptors, 811 unique decoded images, 3 animations, 134 animation frames.
+- Page 21 confirmed as built-in Mini Numpad with 17 touch zones and descriptor range 319–352 mapped.
+- Offline descriptor inspector and NumPad icon patcher built (read-only, working-copy only).
+- Wired Raw Input attribution for VID 0C45/PID 800A/MI_00.
+- make-code-based screen Numpad mapping, Num Lock-independent design.
+- Deterministic short/hold state machine.
+- Dry-run provider architecture designed.
+- Official UI widget crosswalk initiated (icon, GIF, keyboard-key, page, variable concepts).
+- Structural analysis of UartTFT-II_Flash.bin completed and independently reviewed.
+- Levetop LT168/SDK/UI_Editor-II materials reviewed.
+- gavindi/Aula_L99_Linux reviewed.
+- kei825/aula-l99-screen-fw reviewed.
+
+### 3. What remains uncommitted, if anything
+
+- Working tree is clean; all completed work is committed.
+
+### 4. Exact evidence categories
+
+A. **User-unit verified** — Directly observed on the user's own AULA L99, official files held by the user, or captures produced from that unit.
+B. **AULA vendor artifacts verified** — Derived from official AULA applications, installers, firmware packages, updaters, or official download sources.
+C. **Levetop official reference** — Derived from official Levetop documentation, LT168B SDK, LT168B MCU SDK, UI_Editor-II examples, or official compiled reference artifacts.
+D. **Public teardown evidence** — Derived from a publicly available AULA L99 teardown/review sample, not from the user's own keyboard.
+E. **Third-party research** — Derived from gavindi/Aula_L99_Linux or kei825/aula-l99-screen-fw.
+F. **Supported inference** — Strongly suggested by multiple evidence sources but not independently verified.
+G. **Unverified** — Not yet proven for the user's exact hardware or firmware revision.
+
+Categories D and E are never presented as direct evidence from the user's own unit.
+
+### 5. User-unit verified facts
+
+- Wired Raw Input attribution: VID 0C45 / PID 800A / MI_00.
+- Factory UartTFT-II_Flash.bin size and SHA-256 verified.
+- HFD_Code_V2.2.bin and HFD_Code_V2.3.bin sizes and hashes verified.
+- Page 21 Mini Numpad: 11 display records, 18 touch records, 17 type 0xC001 action records, descriptor range decimal 319 through 352.
+- Descriptor 341/342 mapped; patch feasibility proven for offline working copy only.
+- Offline NumPad icon patcher round-trip validated.
+- Upload protocol: 154 logical chunks, approximately 309071 bytes, not standard JPEG.
+
+### 6. Levetop official findings
+
+- Official LT168/SDK/UI_Editor-II materials reviewed.
+- Official UI widget families identified: icon, GIF, keyboard-key, page, variable.
+- Type 3 mapped to official icon widget family.
+- Type 5 mapped to official GIF widget family.
+- Official example supports at least 90 pages.
+- Official runtime model supports widget WriteAddr operations and system page switching through 0x7000.
+- Official LT168 memory map, startup/vector model, W25N01GV driver, compiled reference artifacts identified.
+- LT168 compatibility strongly supported but must be independently fingerprinted against the user's HFD Code V2.3.
+- Earlier generic assumption "widget variable N maps to 0x0600 + N" must not be generalized.
+
+### 7. Public teardown findings (explicitly not from the user's keyboard)
+
+- A public AULA L99 teardown sample shows an HFD168BDP screen controller, HFD80CP100 keyboard MCU, Winbond external memory, and a reported GT911 touch controller.
+- The user's own unit has not been physically opened.
+
+### 8. gavindi/Aula_L99_Linux findings and reuse candidates
+
+- Provides substantial reverse engineering of: keyboard HID protocol, RTC/system-monitor packets, screen image/GIF upload, serial transfer behavior, Linux-side tooling.
+- Historical LT7689 wording is an engine-lineage or historical hypothesis, not confirmed physical hardware identity; not adopted as confirmed.
+- Reuse candidates: HID protocol mapping, telemetry packets, image/GIF upload format, serial transfer behavior.
+- Third-party real-hardware claims have not been independently reproduced on the user's unit.
+
+### 9. kei825/aula-l99-screen-fw findings and audit status
+
+- Provides M*Core disassembler/emulator, stock HFD Code V2.2 emulation claims, LT168 MMIO model.
+- GT911, W25N01GV, SCI1 and LCD models documented.
+- Custom 4x4 deck design and PC-side serial deck implementation documented.
+- Detailed hardware/firmware notes provided.
+- Repository omits proprietary Levetop engine/SDK components and cannot be treated as a standalone reproducible firmware build.
+- No third-party firmware should be flashed without independent compatibility and recovery verification.
+- Audit status: reviewed as third-party research; not independently verified on the user's unit.
+
+### 10. Conflicts and corrected assumptions
+
+- LT7689 wording is an engine-lineage or historical hypothesis, not confirmed physical hardware identity.
+- HFD168BDP marking comes from a public teardown sample.
+- LT168 compatibility is strongly supported but must be independently fingerprinted against the user's HFD Code V2.3.
+- Type 3 is now mapped to the official icon widget family.
+- Type 5 is now mapped to the official GIF widget family.
+- Official UI_Editor-II examples support at least 90 pages.
+- Official runtime model supports widget WriteAddr operations and system page switching through 0x7000.
+- The earlier generic assumption "widget variable N maps to 0x0600 + N" must not be generalized.
+
+### 11. Current input bridge status
+
+- Firmware-free input bridge POC designed (docs/NATIVE_WIDGET_AND_COMPANION_DESIGN.md).
+- Device-aware HID attribution via Raw Input for 0C45:800A.
+- Deterministic short/hold state machine (short < 500 ms, dead zone 500–699 ms, hold >= 700 ms).
+- Num Lock-independent make-code mapping.
+- Bitfocus Companion provider-agnostic architecture.
+- Not yet implemented; no source code changes.
+
+### 12. Current dynamic-screen strategy
+
+- Native type 3/type 5 dynamic widget analysis documented (docs/NATIVE_WIDGET_AND_COMPANION_DESIGN.md).
+- Type 3 variable-15 record exists on Page 21.
+- Type 3 mapped to official icon widget family; type 5 mapped to official GIF widget family.
+- "widget variable N maps to 0x0600 + N" assumption must not be generalized.
+- Do not begin dynamic-widget task now; next task is HFD Code V2.3 fingerprint.
+
+### 13. Continued hardware NO-GO decision
+
+HARDWARE WRITE STATUS: NO-GO
+
+Unresolved:
+- exact user-unit screen-controller revision
+- HFD Code V2.3 architecture fingerprint
+- modified-resource acceptance
+- full updater write scope
+- interrupted-write recovery
+- independent verification of third-party recovery claims
+
+**Exact next task:**
+"Perform a read-only architecture fingerprint of the user's HFD_Code_V2.3.bin against the official Levetop LT168 reference binary, startup/vector model, ISA vocabulary, MMIO constants, and the kei825 M*Core disassembler/emulator assumptions. Do not execute or flash firmware."
+
+**Task after that (do not start):**
+"Build a field-level offline crosswalk between official UI_Editor-II icon/GIF/touch records and the AULA resource-image records, then decide whether stock-firmware runtime variables, a resource-only rebuild, or custom firmware is the safest Stream Deck path."
+
+### Agent workflow policy
+
+- Ordinary/free agent: coding, tests, captures, documentation, Companion work, and deterministic analysis.
+- REA: only on demand for difficult native executable analysis.
+- Normal target: 20k–50k tokens.
+- At approximately 60k: stop opening new branches and finish only the current evidence path.
+- Hard ceiling: 80k tokens.
+- Before 80k: stop and produce a handover.
+- Never allow 200k+ exploratory sessions.

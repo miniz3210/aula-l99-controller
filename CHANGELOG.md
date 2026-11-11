@@ -15,6 +15,13 @@
 - Hardware decision remains NO-GO.
 - Next task is native dynamic-widget analysis (display type 3 variable-to-icon selection, display type 5 animation behavior).
 
+### Added
+- Official Levetop LT168/SDK/UI_Editor-II materials reviewed; official icon/GIF/kbkey/page/runtime-variable concepts identified; official example supports 90 pages; official LT168 memory map, startup/vector model, W25N01GV driver and compiled reference artifacts identified; widget WriteAddr operations and system page switching through 0x7000 documented.
+- Public teardown evidence separated from user-unit evidence (HFD168BDP/HFD80CP100/Winbond/GT911 from public sample only; user's unit not physically opened).
+- gavindi/Aula_L99_Linux reviewed as a source for existing HID, telemetry, image/GIF upload and serial work; historical LT7689 wording not adopted as confirmed chip identity.
+- kei825/aula-l99-screen-fw reviewed as third-party M*Core/LT168 emulator, GT911/NAND/SCI model and custom-deck research; third-party findings not yet independently verified on the user's unit.
+- Next task is HFD Code V2.3 read-only architecture fingerprint; hardware write status remains NO-GO.
+
 ## v0.6.2 - 2026-11-10
 
 ### Added
