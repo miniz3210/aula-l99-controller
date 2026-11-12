@@ -922,3 +922,169 @@ Unresolved:
 - Hard ceiling: 80k tokens.
 - Before 80k: stop and produce a handover.
 - Never allow 200k+ exploratory sessions.
+
+### 14. HFD Code V2.3 Evidence Audit (Completed)
+
+#### 14.1 Verified HFD Code V2.3 Identity
+- Target file: `tools/softce-aula-l99-research/extracted/HFD_Code_V2.3.bin`
+- Size: 313,652 bytes
+- SHA-256: A76806ADA9648D2672BBEBEAD8A9BB396C0BC6F3A0A071E22E99001AC3359D03
+- Local analysis artifact only; not added to Git.
+
+#### 14.2 Type 3 Evidence Audit
+- Type 3 serialized UI records are 14 bytes.
+- Parsed fields: `variable`, `x`, `y`, `first_icon`, `last_icon`, `min_value`, `max_value`.
+- Manifest contains multi-state Type 3 records, disproving the earlier claim that all Type 3 records are two-state.
+- Universal two-state claim: CONTRADICTED by manifest evidence.
+
+#### 14.3 Architecture Evidence Chain
+The working architecture assessment is: **HFD Code V2.3 is little-endian LT168-family M*Core firmware.**
+Supporting evidence (STRONGLY SUPPORTED, NOT VENDOR-CONFIRMED):
+- Third-party `mcore-elf` build configuration
+- M*Core decoder and emulator implementations (`mcdis.py`, `mcemu.py`, `mcemu.c`)
+- Little-endian vector and pointer structure
+- Flash/image addresses in `0x60000000` space
+- SRAM addresses in `0x00800000–0x008BFFFF`
+- Minimum 2-byte instruction alignment
+- Bounded native decoding with structurally credible branches, calls, returns, stack saves/restores, SRAM/image/MMIO constants, and in-image targets
+
+Do not describe this as Levetop vendor-confirmed.
+
+#### 14.4 Candidate Image Base and Vector Evidence
+- Candidate image base: `0x60010000` (STRONG INFERENCE)
+- Supported by 21 reproducibly counted non-zero LE32 candidate entries in the first 256 bytes
+- Under candidate image base `0x60010000`, all 21 candidate targets are 2-byte aligned and fall within the verified image
+- Not independently proven by vendor loader metadata
+
+#### 14.5 M*Core Decoder Validation
+- Existing third-party M*Core decoder: `local_analysis/third_party/kei825_aula-l99-screen-fw/emulator/mcdis.py`
+- Related emulator semantics: `mcemu.py`, `mcemu.c`
+- Python invoked using: `.venv-analysis\Scripts\python.exe` (Python 3.12.10)
+- Four bounded candidate regions decoded:
+  - 128 bytes from `0x60017490`
+  - 64 bytes from `0x6001F958`
+  - 64 bytes from `0x6001FA10`
+  - 64 bytes from `0x6001F980`
+- Across these linear decoding windows:
+  - 160 total 16-bit words
+  - 152 known mnemonics
+  - 8 `.short` fallbacks
+  - 95% linear mnemonic coverage
+  - 16 direct branch/call targets
+  - 16/16 targets 2-byte aligned
+  - 16/16 targets within the image
+- Semantics agreement for:
+  - Load/store immediate scaling
+  - BR displacement
+  - `loopt`
+  - LR/LJ literal addressing
+  - `jmp`
+  - `jsr`
+  - `rts` represented as `jmp r15`
+
+#### 14.6 Linear-Decoding Caveat
+The 95% result is linear mnemonic coverage, not proof that 95% of the bytes are reachable executable code.
+
+At candidate entry `0x60017490`, the initial sequence includes:
+- Loading candidate stack value `0x00874FFC`
+- Loading candidate image/VBR value `0x60010000`
+- Control-register setup
+- Register initialization
+- Calls
+- A self-branch at `0x600174BC`
+
+Bytes following that self-branch may include:
+- Literal pools
+- Embedded data
+- Unreachable padding
+- Another independent function
+
+Therefore:
+- Do not describe all linearly decoded words as reachable code.
+- Do not use linear sweep alone to build the next CFG.
+- The next phase must use recursive control-flow traversal from defensible entry points.
+- Stop traversal at unconditional branches, returns, invalid/fallback words, and established data boundaries.
+- Treat call targets and branch targets as candidates requiring validation.
+
+#### 14.7 Claims That Must Remain Unverified or Retracted
+Do not state any of the following as verified:
+- The Type 3 dispatcher exists at `0x60031198–0x600315D0` → **NOT ESTABLISHED**
+- `0x60049D98` is independently verified as the transmitter function → **existing document-supported claim, not independently verified**
+- REA was invoked on HFD Code V2.3 → **UNVERIFIED**
+- 135,969 instructions were identified → **UNVERIFIED**
+- A 32-byte RAM record layout was established → **UNVERIFIED**
+- Serialized Type 3 records are copied directly into a 32-byte runtime structure → **UNVERIFIED**
+- Type 3 `variable N` maps to RAM word `0x0600 + N` → **UNVERIFIED**
+- The icon-selection formula has been established → **UNVERIFIED**
+- All Type 3 records are two-state → **CONTRADICTED by manifest evidence**
+- ARM/Thumb or SuperH decoding provides evidence for this firmware → **UNVERIFIED**
+
+#### 14.8 Decoder Limitations to Preserve
+- `mcdis.py` is a hand-transcribed third-party decoder reportedly derived from binutils M*Core tables.
+- The original upstream `mcore-opc.h` and `mcore-dis.c` are not present locally.
+- No independent known-good M*Core opcode vectors are available locally.
+- Agreement among `mcdis.py`, `mcemu.py`, and `mcemu.c` is not independent validation because they originate from the same third-party repository.
+- Duplicate-code/opcode-table first-match ordering remains unverified.
+- This limitation was not exercised by the bounded regions used for the GO decision.
+- Broader validation may require:
+  - Original binutils M*Core opcode tables
+  - `mcore-elf-objdump`
+  - Or known-good assembler/disassembler vectors
+
+#### 14.9 Current Evidence Classifications
+
+| Claim | Status |
+|-------|--------|
+| HFD Code V2.3 size and SHA-256 | VERIFIED |
+| Type 3 record size (14 bytes) | VERIFIED |
+| Type 3 parsed fields | VERIFIED |
+| Multi-state Type 3 records exist | VERIFIED |
+| Universal two-state Type 3 claim | CONTRADICTED |
+| Little-endian M*Core architecture | STRONGLY SUPPORTED, NOT VENDOR-CONFIRMED |
+| Candidate image base 0x60010000 | STRONG INFERENCE |
+| 21 candidate entries in-range | VERIFIED |
+| Bounded decoder validation (4 regions) | VERIFIED |
+| 95% linear mnemonic coverage | VERIFIED (linear sweep only) |
+| 16 branch/call targets in-image | VERIFIED |
+| Semantics agreement with mcemu | VERIFIED (bounded regions) |
+| Type 3 dispatcher at 0x60031198–0x600315D0 | NOT ESTABLISHED |
+| 0x60049D98 transmitter role | DOCUMENT-SUPPORTED, NOT INDEPENDENTLY VERIFIED |
+| Type 3 to runtime RAM mapping | UNVERIFIED |
+| Icon-selection formula | UNVERIFIED |
+| 32-byte RAM record layout | UNVERIFIED |
+| REA invocation on V2.3 | UNVERIFIED |
+| 135969 instructions | UNVERIFIED |
+| ARM/Thumb/SuperH evidence | UNVERIFIED |
+
+#### 14.10 Current GO/NO-GO State
+
+**GO for bounded M*Core control-flow discovery.**
+
+**NOT GO for claiming that the Type 3 dispatcher, Type 3 runtime mapping, or icon-selection formula has been established.**
+
+#### 14.11 Exact Next Bounded Task
+
+Build a minimal recursive M*Core CFG from the defensible startup/vector entries and their direct call targets, without inspecting the previous Type 3 address claims.
+
+The next task must not begin by decoding `0x60031198–0x600315D0`.
+
+#### 14.12 Prohibited Assumptions
+- Do not assume the Type 3 dispatcher location is known.
+- Do not assume `0x60049D98` is a verified transmitter.
+- Do not assume a 32-byte RAM record layout exists.
+- Do not assume serialized Type 3 records map directly to runtime structures.
+- Do not assume Type 3 variable N maps to RAM word `0x0600 + N`.
+- Do not assume the icon-selection formula is known.
+- Do not assume all Type 3 records are two-state.
+- Do not assume ARM/Thumb or SuperH decoding is relevant.
+- Do not describe linearly decoded words as reachable code.
+- Do not use linear sweep alone for CFG construction.
+- Do not treat `mcdis.py`/`mcemu.py`/`mcemu.c` agreement as independent validation.
+- Do not claim Levetop vendor confirmation for the M*Core architecture assessment.
+
+#### 14.13 80K-Token Hard Ceiling Reminder
+- Ordinary/free coding agent for bounded deterministic work.
+- REA only on demand for difficult native executable analysis.
+- Stop and hand over before 80K tokens.
+
+## External Research Reconciliation and New-Chat Handover

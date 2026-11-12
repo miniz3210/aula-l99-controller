@@ -3,17 +3,18 @@
 ## Unreleased
 
 ### Added
-- Corrected structural report for UartTFT-II_Flash.bin completed and independently reviewed.
-- Interval arithmetic independently revalidated against the raw file bytes.
-- Container coverage figures recorded: 70,051,928 bytes covered (54.9000%), 57,547,116 bytes uncovered (45.1000%), total 127,599,044 bytes.
-- Six zero-filled external gaps recorded: [0x00A355EC, 0x04000000) 56,404,500 bytes; [0x0404B00B, 0x04060000) 86,005 bytes; [0x040AB00B, 0x040C0000) 86,005 bytes; [0x0410B00B, 0x041E0000) 872,437 bytes; [0x0422B00B, 0x04240000) 86,005 bytes; [0x05B0D07C, 0x05B10000) 12,164 bytes.
-- Exact semantic coverage remains unknown.
-- Corrected Page 21 boundaries: page record 0x00021ECC, display block [0x00024B7E, 0x00024C4A) 204 bytes, touch block [0x00024C4A, 0x00024DA0) 342 bytes, background descriptor table offset 0x005C018A.
-- Conservative decode-issue conclusion recorded: 26 entries fail bitmap bounds validation, unreferenced, bank-1 counterparts equally invalid; "No evidence was found that these entries corrupt any currently referenced UI asset. Their intended semantics remain unknown."
-- Provenance distinction recorded: matching SHA-256 confirms byte identity, not identical provenance; provenance wording conflict, not structural-data conflict.
-- Executable-code conclusion remains limited: no executable region identified by structural analysis; every byte non-executable and HFD_Code containing all screen-MCU executable code both unverified.
-- Hardware decision remains NO-GO.
-- Next task is native dynamic-widget analysis (display type 3 variable-to-icon selection, display type 5 animation behavior).
+- Completed evidence audit of earlier unsupported Type 3/native claims for HFD Code V2.3.
+- Verified HFD Code V2.3 identity: 313652 bytes, SHA-256 A76806ADA9648D2672BBEBEAD8A9BB396C0BC6F3A0A071E22E99001AC3359D03.
+- Established little-endian M*Core as the strongly supported working architecture for HFD Code V2.3, based on third-party mcore-elf build configuration, M*Core decoder/emulator implementations, little-endian vector/pointer structure, flash/image addresses in 0x60000000 space, SRAM addresses in 0x00800000–0x008BFFFF, minimum 2-byte instruction alignment, and bounded native decoding with structurally credible branches, calls, returns, stack saves/restores, SRAM/image/MMIO constants, and in-image targets. Explicitly noted: this is not Levetop vendor-confirmed.
+- Completed bounded M*Core decoder validation against third-party mcdis.py, mcemu.py, and mcemu.c across four bounded regions (128 bytes from 0x60017490, 64 bytes from 0x6001F958, 64 bytes from 0x6001FA10, 64 bytes from 0x6001F980): 160 total 16-bit words, 152 known mnemonics, 8 .short fallbacks, 95% linear mnemonic coverage, 16 direct branch/call targets, 16/16 targets 2-byte aligned, 16/16 targets within image. Semantics agreement for load/store immediate scaling, BR displacement, loopt, LR/LJ literal addressing, jmp, jsr, rts represented as jmp r15.
+- Current GO status: "GO for bounded M*Core control-flow discovery." NOT GO for claiming that the Type 3 dispatcher, Type 3 runtime mapping, or icon-selection formula has been established.
+- Type 3 evidence audit: Type 3 serialized UI records are 14 bytes; parsed fields include variable, x, y, first_icon, last_icon, min_value, max_value; manifest contains multi-state Type 3 records, disproving earlier claim that all Type 3 records are two-state.
+- Candidate image base 0x60010000 supported by 21 in-range candidate entries and existing documentation, but not independently proven by vendor loader metadata.
+- Linear-decoding caveat documented: 95% is linear mnemonic coverage, not proof that 95% of bytes are reachable executable code; entry at 0x60017490 includes stack/VBR setup and self-branch at 0x600174BC; bytes following may include literal pools, embedded data, unreachable padding, or independent functions; next phase must use recursive control-flow traversal from defensible entry points.
+- Claims retracted or left unverified: Type 3 dispatcher at 0x60031198–0x600315D0 (NOT ESTABLISHED); 0x60049D98 transmitter role (existing document-supported claim, not independently verified); REA invocation on HFD Code V2.3; 135969 instructions identified; 32-byte RAM record layout; serialized Type 3 records copied into 32-byte runtime structure; Type 3 variable N maps to RAM word 0x0600 + N; icon-selection formula established; all Type 3 records two-state (CONTRADICTED by manifest); ARM/Thumb or SuperH decoding provides evidence.
+- Decoder limitations preserved: mcdis.py is a hand-transcribed third-party decoder reportedly derived from binutils M*Core tables; original binutils mcore-opc.h and mcore-dis.c not present locally; no independent known-good M*Core opcode vectors; agreement among mcdis.py, mcemu.py, mcemu.c is not independent validation (same third-party repo); duplicate-code/opcode-table first-match ordering unverified; broader validation may require original binutils M*Core opcode tables, mcore-elf-objdump, or known-good assembler/disassembler vectors.
+- No firmware executed or emulated; no hardware accessed; no tracked file modified during read-only analysis.
+- No firmware, vendor packages, captures, temporary analysis files, generated disassembly, or local-only artifacts added to Git.
 
 ### Added
 - Official Levetop LT168/SDK/UI_Editor-II materials reviewed; official icon/GIF/kbkey/page/runtime-variable concepts identified; official example supports 90 pages; official LT168 memory map, startup/vector model, W25N01GV driver and compiled reference artifacts identified; widget WriteAddr operations and system page switching through 0x7000 documented.

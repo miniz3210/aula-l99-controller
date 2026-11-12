@@ -13,7 +13,13 @@ This is an active reverse-engineering and prototyping project. The present miles
 - All 17 touch zones, return codes, rectangles, and normal/pressed icon descriptor pairs mapped.
 - Offline-only ARGB4444 encoder and working-copy patcher added for NumPad 1 descriptors 341/342
   (scripts/patch_l99_numpad_icon.py). Factory image is never modified.
-- No modified resource image has been flashed.
+- HFD Code V2.3 target identity verified: 313,652 bytes, SHA-256 A76806ADA9648D2672BBEBEAD8A9BB396C0BC6F3A0A071E22E99001AC3359D03.
+- Type 3 is a 14-byte serialized UI record family with parsed fields: variable, x, y, first_icon, last_icon, min_value, max_value.
+- Multi-state Type 3 records exist, disproving the earlier universal two-state claim.
+- Little-endian M*Core is the strongly supported working architecture for HFD Code V2.3, based on structural and third-party implementation evidence (not Levetop vendor-confirmed).
+- Existing third-party M*Core decoder (mcdis.py) has passed bounded structural validation across four regions (95% linear mnemonic coverage, 16/16 branch targets in-image and aligned).
+- Native Type 3 runtime mapping and dispatcher remain unverified.
+- No claim of safe firmware modification or flashing follows from this analysis.
 - Current hardware-write status remains blocked pending offline patch validation and recovery review.
 
 ## Goal / Project objective
@@ -43,7 +49,7 @@ Screen side:
 - 320x480 touchscreen.
 - Built-in local page and resource engine.
 - LT168-family controller firmware.
-- HFD executable images disassemble as little-endian M*Core according to the external research reproduced by this project.
+- HFD Code V2.3 architecture fingerprint: little-endian M*Core is the strongly supported working architecture, based on structural and third-party implementation evidence (not Levetop vendor-confirmed).
 
 Keyboard events and screen runtime updates use different transport paths.
 
@@ -161,9 +167,12 @@ Next transport milestone:
 
 HARDWARE WRITE STATUS: NO-GO
 
+NATIVE ANALYSIS STATUS: GO for bounded M*Core control-flow discovery.
+
+NOT GO for claiming that the Type 3 dispatcher, Type 3 runtime mapping, or icon-selection formula has been established.
+
 Unresolved:
 - exact user-unit screen-controller revision
-- HFD Code V2.3 architecture fingerprint
 - modified-resource acceptance
 - full updater write scope
 - interrupted-write recovery
