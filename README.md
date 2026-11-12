@@ -195,11 +195,6 @@ Unresolved:
 AULA L99 screen resource image (`UartTFT-II_Flash.bin`). It never opens USB, COM, or HID, never
 imports serial/USB/HID/updater modules, and never modifies the source image.
 
-It resolves a descriptor (or a Page 21 touch return code) to its source offset, format, dimensions,
-encoded allocation, references, and decoded PNG, then classifies every finding as Verified, Inferred,
-or Unknown. Patch feasibility is reported as `PROVEN_FOR_OFFLINE_WORKING_COPY`, `UNRESOLVED`, or
-`REJECTED`.
-
 Placeholder usage (page / return-code mode; does not imply vendor images are included):
 
     python scripts/inspect_l99_descriptor.py `
@@ -240,6 +235,33 @@ patcher for the Page 21 NumPad 1 icons (descriptors 341 normal, 342 pressed). It
 
 See `tests/test_patch_l99_numpad_icon.py` for synthetic-test coverage (no vendor firmware
 required or embedded).
+
+## Tooling: bounded canonical M*Core CFG (research, ignored local artifacts)
+
+`scripts/research/hfd_cfg.py` is a read-only, offline, bounded recursive M*Core CFG
+utility for `HFD_Code_V2.3.bin`. It reuses the local third-party `mcdis.py` decoder for
+instruction decoding and never modifies the input binary. All generated output is written
+under `local_analysis/cfg/` and is ignored by Git (local artifacts only).
+
+`tests/test_hfd_cfg_partition.py` provides 51 standard-library unit tests covering canonical
+partitioning, edge remap/validation, byte accounting, evidence classification, and
+acceptance-status determination. No vendor firmware is embedded in the tests.
+
+Acceptance status `PASS_BUDGET_TRUNCATED` means the bounded observed graph is internally
+canonical and reproducible, but traversal stopped because the 4096-instruction budget was
+exhausted. The graph is accepted as bounded, correct within its scope, and not
+complete-firmware coverage.
+
+Independent cross-validation was performed with Ghidra `analyzeHeadless` and the third-party
+ghidra-mcore processor (MCORE:LE:32:default) on an Ubuntu x86_64 host. This Ghidra
+verification confirmed startup literals, two direct-call targets (`0x600174B8 -> 0x60045150`
+and `0x600174BA -> 0x600449B0`), and the self-loop `0x600174BC -> 0x600174BC`. ABI
+correctness of the patched Ghidra compiler spec remains unknown, and decompiler
+parameter/return/calling-convention conclusions are not treated as verified. Full-firmware
+coverage is not claimed.
+
+See `docs/PROJECT_HANDOVER.md` for full implementation detail, metrics, and evidence
+classification.
 
 ## Repository contents
 

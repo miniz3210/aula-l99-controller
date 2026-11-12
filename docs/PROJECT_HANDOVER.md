@@ -12,7 +12,7 @@ Turn the AULA L99 keyboard's built-in 320x480 touchscreen into a Stream Deck-sty
 - Branch: main
 - Remote: miniz3210/aula-l99-controller.git
 - Current published release: v0.1.1
-- HEAD commit: 516e3c82cdbe6c95c10ef8a92d3d7764013192d9
+- HEAD commit: 3ec58fd (research: add bounded canonical MCore CFG tooling)
 - Local ignored research directory: tools/softce-aula-l99-research
 - Vendor binaries and extracted artifacts are local only and ignored by Git.
 
@@ -866,6 +866,213 @@ Categories D and E are never presented as direct evidence from the user's own un
 - Repository omits proprietary Levetop engine/SDK components and cannot be treated as a standalone reproducible firmware build.
 - No third-party firmware should be flashed without independent compatibility and recovery verification.
 - Audit status: reviewed as third-party research; not independently verified on the user's unit.
+
+## Bounded canonical M*Core CFG checkpoint (verified)
+
+### 1. Checkpoint identity
+
+- Tool: `scripts/research/hfd_cfg.py`
+- Tests: `tests/test_hfd_cfg_partition.py` (51 standard-library unit tests, all passing)
+- Git checkpoint: `3ec58fd` — `research: add bounded canonical MCore CFG tooling`
+- Target: `HFD_Code_V2.3.bin`
+- Target size: 313652 bytes
+- Target SHA-256: `A76806ADA9648D2672BBEBEAD8A9BB396C0BC6F3A0A071E22E99001AC3359D03`
+- Decoder: `local_analysis/third_party/kei825_aula-l99-screen-fw/emulator/mcdis.py`
+- Decoder SHA-256: `B6A4B5CBF5E7470AC82A96D19161EC803F3400DC4F65F09B3AECDE74B2A3326A`
+- Candidate image base: `0x60010000`
+- Root: `0x60017490`
+- Prohibited range: `0x60031198-0x600315D0`
+- Current traversal budget: 4096 instructions (max_instructions)
+- Roots used: one, `0x60017490`
+- Budget increase: not yet performed
+- Additional vector roots: not yet added
+
+### 2. Bounded graph result
+
+- bounded_graph_acceptance_status: `PASS_BUDGET_TRUNCATED`
+- graph_scope: `bounded_observed_graph`
+- graph_fully_canonical: `true`
+- output_complete: `false`
+- budget exhaustion: `max_instructions`
+- source traversal nodes: 349
+- source instruction occurrences: 4096
+- source unique instructions: 3371
+- source-node multiply-owned addresses: 708
+- source-node maximum ownership: 3
+- canonical blocks: 475
+- canonical instructions: 3371
+- canonical edges: 605
+- canonical overlaps: 0
+- duplicate canonical instruction ownership: 0
+- duplicate canonical edges: 0
+- unique reachable bytes: 6742
+- overlap redecoded bytes: 0
+- source duplicate occurrence bytes: 1450
+- accepted functions: 22
+- direct-call candidates: 66 total (21 accepted, 45 queued)
+- global max-instructions exhaustion events: 1
+- prohibited-range accesses: 0
+- tests: 51 passing
+
+### 3. Verified self-loop
+
+- `0x600174BC -> 0x600174BC`
+- Exactly one canonical self-loop edge
+- The containing canonical block terminates at `0x600174BC`
+- No fall-through edge to `0x600174BE`
+
+### 4. Independent Ubuntu/Ghidra verification
+
+Environment:
+- REA: 6.9.0 (provider readiness checks only; NOT the primary M*Core disassembly engine)
+- Ghidra: 12.1.4
+- ghidra-mcore source: https://github.com/CUB3D/ghidra-mcore
+- ghidra-mcore commit: `2f32468f68c3b0eccbc875a26fd0a5769d3bfe91`
+- Ghidra language: `MCORE:LE:32:default`
+- Java: OpenJDK 21
+- Host: Ubuntu x86_64
+
+Important limitation:
+- REA was used primarily for provider readiness checks.
+- The actual independent M*Core verification was performed with Ghidra `analyzeHeadless` and the third-party ghidra-mcore processor.
+- Do not overstate REA as the disassembly engine.
+- The Ubuntu host should be described as an independent Ghidra M*Core verification host.
+
+ghidra-mcore compatibility detail:
+- The source clone remained unchanged and clean.
+- The installed little-endian compiler spec required a local compatibility patch for Ghidra 12.1.4:
+  output pentry maxsize changed from 1 to 4 for r2.
+- Installed patched `mcore_le.cspec` SHA-256:
+  `296861E645DF2A7FC496EAAD84067C046D7604E27213C6C9B992C0C70E62E8E4`
+- This patch allowed the compiler spec to load.
+- The patch must not be described as vendor-confirmed ABI evidence.
+- ABI correctness remains UNKNOWN.
+- Assembly and bounded control-flow observations may be used as independent structural evidence.
+- Decompiler parameter, return-value, and calling-convention conclusions must not be treated as verified.
+
+Compiled SLEIGH artifacts:
+- `mcore_le.sla`: size 8834 bytes, SHA-256 `33F759B82C787135277DB022AFA5662A8A5CBDF19CA3E52896016F76E4B03F84`
+- `mcore_be.sla`: size 8818 bytes, SHA-256 `5EC072995C10842C15F17E99EA0D1E2CD5271DFD259A188DF964336506C9E31B`
+
+Verified Ubuntu transfer identities:
+- `HFD_Code_V2.3.bin`: size 313652, SHA-256 `A76806ADA9648D2672BBEBEAD8A9BB396C0BC6F3A0A071E22E99001AC3359D03`
+- `mcdis.py`: size 4771, SHA-256 `B6A4B5CBF5E7470AC82A96D19161EC803F3400DC4F65F09B3AECDE74B2A3326A`
+
+Fixture evidence:
+- startup fixture: `0x60017490` through `0x600174BF`
+- fixture size: 48 bytes
+- fixture SHA-256: `F241FCF814F1CC6D654C4AEC270E600A1DF18130ABF87395C0562CFE7DF332DF`
+- mcdis listing SHA-256: `9913A3F100B445D51E45FCB1E484179C7B45A506FCF482A5597BBAACE9AE6DC5`
+- Ghidra listing: 24 lines
+- Ghidra listing SHA-256: `C24D46A5B6E0DE97E8804C910F6265AC48C3D8A11E916173AA1A80D8F496C9C1`
+- full-startup bounded listing SHA-256: `99F028D2857B5F08ECD13DAA82DD175F26AE2D41C004B210E16CE21300404188`
+
+Verified full-binary startup observations:
+- `0x60017490`: `lrw r1, literal at 0x600174C0`
+- literal `0x600174C0`: `0x00874FFC`
+- `0x60017492`: `mov r0, r1`
+- `0x60017494`: `lrw r1, literal at 0x600174C4`
+- literal `0x600174C4`: `0x60010000`
+- `0x60017496`: `mtcr r1, VBR`
+- `0x60017498`: `mfcr r2, VBR`
+- `0x6001749A` through `0x600174B6`: register-clearing sequence
+- `0x600174B8`: literal-based call through `0x600174C8`
+- literal `0x600174C8`: `0x60045150`
+- verified call: `0x600174B8 -> 0x60045150`
+- `0x600174BA`: literal-based call through `0x600174CC`
+- literal `0x600174CC`: `0x600449B0`
+- verified call: `0x600174BA -> 0x600449B0`
+- `0x600174BC`: `br 0x600174BC`
+
+### 5. Evidence classification to preserve
+
+VERIFIED:
+- Target size and SHA-256
+- Decoder SHA-256
+- Candidate image-relative mappings used by the bounded analysis
+- Root `0x60017490`
+- Canonical bounded nodes, ranges, and edges
+- Calls:
+  - `0x600174B8 -> 0x60045150`
+  - `0x600174BA -> 0x600449B0`
+- Self-loop: `0x600174BC -> 0x600174BC`
+- Zero prohibited-range access
+- Deterministic outputs and reproducibility manifest
+
+STRONG STRUCTURAL INFERENCE:
+- Startup-like initialization role
+- `0x00874FFC` as the initial stack value
+- `0x60010000` as image base and VBR value
+- Structural plausibility of accepted function entries
+- LT168-family little-endian M*Core working architecture
+
+STRUCTURAL CANDIDATE:
+- Queued and not-yet-reached direct-call targets
+- Outside-observed-map valid targets
+- Unresolved indirect-flow sites
+- Function-purpose hypotheses unsupported by independent evidence
+
+UNKNOWN:
+- Type 3 dispatcher
+- Type 3 runtime mapping
+- Icon-selection formula
+- Transmitter
+- Correct ABI semantics of the patched Ghidra compiler spec
+- Complete-firmware reachability
+- Full coverage of all vector roots
+- Purpose of `0x60045150` and `0x600449B0`
+
+### 6. 80K-token hard ceiling and bounded agent-task workflow
+
+- Ordinary/free agent: coding, tests, captures, documentation, Companion work, and deterministic analysis.
+- REA: only on demand for difficult native executable analysis.
+- Normal target: 20k–50k tokens.
+- At approximately 60k: stop opening new branches and finish only the current evidence path.
+- Hard ceiling: 80k tokens.
+- Before 80k: stop and produce a handover.
+- Never allow 200k+ exploratory sessions.
+
+### 7. Chinese 1.0.1.4 baseline and keyboard/screen separation
+
+Chinese version 1.0.1.4 is the analysis baseline because it is currently the only available version known to expose both keyboard firmware upgrade and screen firmware upgrade. These must always be treated as separate upgrade paths targeting different controllers. Do not compare the keyboard updater version and the screen updater version as if they are part of one version sequence.
+
+Keyboard controller firmware and screen-controller firmware are distinct upgrade paths and must never be merged.
+
+### 8. Checksum-scanner requirements
+
+Already documented in section 16 (checksum scanner operation and performance). Quick mode target under 30 seconds, deep-mode cache keyed by source hash/patched hash/scanner version/algorithm list/region map, native CRC implementations, multiprocessing across independent jobs, no full-region rescan for every candidate, mmap/memoryview access, progress reporting, phase timings, deterministic machine-readable output.
+
+### 9. Next task
+
+Create a separate controlled single-root experiment:
+- raise only `max_instructions` from 4096 to 8192;
+- do not add roots;
+- compare the graph incrementally against checkpoint `3ec58fd`;
+- stop if prohibited-range, determinism, canonicalisation, or accounting checks fail.
+
+Multi-root expansion remains HOLD.
+
+Documentation, commit, version, tag, and push require explicit user approval.
+
+### 10. What must not be changed
+
+Do not change Python code, tests, firmware, generated CFG outputs, version files, or analysis budgets.
+Do not modify any file other than:
+- `docs/PROJECT_HANDOVER.md`
+- `README.md`
+- `CHANGELOG.md`
+
+Do not:
+- claim Type 3 discovery;
+- claim full-firmware coverage;
+- claim vendor confirmation of M*Core or the Ghidra processor;
+- claim the compiler-spec patch is the true ABI;
+- change VERSION;
+- change code or tests;
+- run an 8192 experiment;
+- add vector roots;
+- commit, tag, or push.
+
 
 ### 10. Conflicts and corrected assumptions
 

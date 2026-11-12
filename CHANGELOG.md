@@ -3,7 +3,23 @@
 ## Unreleased
 
 ### Added
-- Completed evidence audit of earlier unsupported Type 3/native claims for HFD Code V2.3.
+- Added bounded recursive M*Core CFG tooling (`scripts/research/hfd_cfg.py`) for read-only,
+  bounded control-flow discovery of HFD Code V2.3 (`313652 bytes`, SHA-256
+  `A76806ADA9648D2672BBEBEAD8A9BB396C0BC6F3A0A071E22E99001AC3359D03`).
+- Added canonical block, range, edge, byte-accounting, reproducibility, and
+  evidence-classification outputs under `local_analysis/cfg/` (ignored local artifacts).
+- Added 51 standard-library unit tests in `tests/test_hfd_cfg_partition.py`.
+- Verified startup literals (`0x600174C0 = 0x00874FFC`, `0x600174C4 = 0x60010000`,
+  `0x600174C8 = 0x60045150`, `0x600174CC = 0x600449B0`), two direct-call targets
+  (`0x600174B8 -> 0x60045150`, `0x600174BA -> 0x600449B0`), and the self-loop
+  (`0x600174BC -> 0x600174BC`) with independent Ghidra M*Core analysis
+  (`analyzeHeadless`, ghidra-mcore commit `2f32468f`, language `MCORE:LE:32:default`,
+  Ubuntu x86_64 host).
+- The graph is accepted but budget-truncated (`PASS_BUDGET_TRUNCATED`, max_instructions
+  exhaustion at 4096 instructions); this is bounded control-flow discovery only, not
+  complete-firmware coverage.
+
+### Added
 - Verified HFD Code V2.3 identity: 313652 bytes, SHA-256 A76806ADA9648D2672BBEBEAD8A9BB396C0BC6F3A0A071E22E99001AC3359D03.
 - Established little-endian M*Core as the strongly supported working architecture for HFD Code V2.3, based on third-party mcore-elf build configuration, M*Core decoder/emulator implementations, little-endian vector/pointer structure, flash/image addresses in 0x60000000 space, SRAM addresses in 0x00800000–0x008BFFFF, minimum 2-byte instruction alignment, and bounded native decoding with structurally credible branches, calls, returns, stack saves/restores, SRAM/image/MMIO constants, and in-image targets. Explicitly noted: this is not Levetop vendor-confirmed.
 - Completed bounded M*Core decoder validation against third-party mcdis.py, mcemu.py, and mcemu.c across four bounded regions (128 bytes from 0x60017490, 64 bytes from 0x6001F958, 64 bytes from 0x6001FA10, 64 bytes from 0x6001F980): 160 total 16-bit words, 152 known mnemonics, 8 .short fallbacks, 95% linear mnemonic coverage, 16 direct branch/call targets, 16/16 targets 2-byte aligned, 16/16 targets within image. Semantics agreement for load/store immediate scaling, BR displacement, loopt, LR/LJ literal addressing, jmp, jsr, rts represented as jmp r15.
