@@ -1689,4 +1689,103 @@ The next task must not begin by decoding `0x60031198–0x600315D0`.
 - REA only on demand for difficult native executable analysis.
 - Stop and hand over before 80K tokens.
 
+## 32. HFD CFG 12288/1024 bounded experiment (accepted)
+
+### 32.1 Implementation
+
+- Exact Git commit: `d324b641742b16a18ba8f3c4e1de8f35c575138f` — `research: add bounded 12288-1024 HFD CFG experiment`
+- New experimental CLI profile: `--experimental-single-root-12288-blocks-1024`
+  - Profile name: `single_root_12288_blocks_1024`
+  - Required root: `0x60017490` (exactly one)
+  - Required `max_instructions`: `12288`
+  - Required `max_basic_blocks`: `1024`
+  - All other budgets at `DEFAULT_BUDGETS` defaults
+  - Output isolated under `local_analysis/cfg_experiments/single_root_12288_blocks_1024_run1/` and `_run2/`
+- `DEFAULT_BUDGETS` unchanged: `max_instructions` remains `4096`, `max_basic_blocks` remains `512`.
+- Existing profiles unchanged (`default_bounded`, `single_root_8192`, `single_root_8192_blocks_1024`).
+
+### 32.2 Validation
+
+- Full unittest suite: 295 PASS.
+- `py_compile` PASS.
+- Two deterministic runs (run1 and run2).
+- Six matching artifact hashes (run1 == run2 byte-for-byte for all six standard outputs).
+- Queue reconciliation PASS: `253 + 90 = 343`.
+- Canonical safety counters zero: `prohibited_range_rejection_count == 0`, `unique_prohibited_target_count == 0`, `canonical_overlap_pair_count == 0`, `canonical_duplicate_instruction_ownership_count == 0`, `overlap_redecoded_byte_count == 0`.
+- `budget_exhaustion_status`: `max_basic_blocks` (binding budget).
+- `bounded_graph_acceptance_status`: `PASS_BUDGET_TRUNCATED`.
+
+### 32.3 Accepted metrics (12288/1024 vs baseline 8192/1024)
+
+| Metric | 8192/1024 | 12288/1024 | Delta |
+|--------|-----------|------------|-------|
+| Root | `0x60017490` | `0x60017490` | unchanged |
+| `max_instructions` | 8192 | 12288 | +4096 |
+| `max_basic_blocks` | 1024 | 1024 | unchanged |
+| Binding budget | `max_instructions` | `max_basic_blocks` | changed |
+| Canonical blocks | 917 | 1297 | +380 |
+| Canonical instructions | 7132 | 10016 | +2884 |
+| Canonical edges | 1179 | 1634 | +455 |
+| Accepted functions | 48 | 52 | +4 |
+| Queue records | 264 | 343 | +79 |
+| Pending queue records | 62 | 90 | +28 |
+| Unique pending addresses | 59 | 79 | +20 |
+
+Clearly distinguished:
+- Queue records: 264 -> 343 (total queue discovery records, including duplicates per call site/depth).
+- Deduplicated pending addresses: 59 -> 79 (unique pending block/function work targets).
+- Accepted functions: 48 -> 52.
+
+### 32.4 Evidence classifications
+
+VERIFIED:
+- Deterministic bounded graph topology (run1 == run2, six matching artifact hashes).
+- Queue reconciliation (`253 + 90 = 343`).
+- Safety invariants (zero prohibited-range access, zero canonical overlaps, zero duplicate ownership/edges).
+
+UNKNOWN:
+- Complete firmware reachability.
+- Type 3 dispatcher.
+- Type 3 runtime mapping.
+- Icon-selection formula.
+- Patched Ghidra ABI correctness.
+
+### 32.5 Decision gates
+
+| Gate | Status | Condition |
+|------|--------|-----------|
+| 12288/1024 bounded experiment | ACCEPTED | `PASS_BUDGET_TRUNCATED`, binding budget `max_basic_blocks=1024`, reconciliation PASS, deterministic runs |
+| Change `DEFAULT_BUDGETS` | HOLD | |
+| Raise `max_basic_blocks` | HOLD | |
+| Add vector roots | HOLD | |
+| Multi-root expansion | HOLD | |
+| Type 3 investigation | HOLD | |
+| Hardware flashing | NO-GO | |
+
+### 32.6 Next research
+
+Read-only frontier analysis of 90 pending queue records representing 79 unique addresses (`analyze_pending.py` preserved untracked).
+
+### 32.7 Source JSON SHA-256 hashes
+
+- Baseline input (`single_root_8192_blocks_1024/cfg_summary.json`): `EF36367B1B71CA7DE2CFC61F3013D85F7EB8569B6BB2EB1A3D5AB6F585AD0BC2`
+- Experiment input (`single_root_12288_blocks_1024_run1/cfg_summary.json`): `64B1037BD855392E74E1FEFB40B4C09B1D5432E81355545D40BADAC96E25F14B`
+
+### 32.8 Comparison JSON SHA-256
+
+- `local_analysis/cfg_experiments/comparison_8192_vs_12288.json`: `DFCDD5691CFE0982BF933C9F0558EE3337767514AA160EF6D7C7913AA2C6EC4E`
+- Generated via `scripts/research/hfd_cfg.py --compare-baseline-json ... --compare-experiment-json ... --compare-output ...`
+- Comparison output does NOT embed source artifact hashes; it records explicit `baseline_json_path` / `experiment_json_path` provenance paths per metric record.
+
+### 32.9 Six reproducibility hashes (run1 == run2)
+
+| Artifact | run1 SHA-256 | run2 SHA-256 | Match |
+|----------|--------------|--------------|-------|
+| `cfg_summary.json` | `64B1037BD855392E74E1FEFB40B4C09B1D5432E81355545D40BADAC96E25F14B` | `64B1037BD855392E74E1FEFB40B4C09B1D5432E81355545D40BADAC96E25F14B` | yes |
+| `cfg_nodes.json` | `B83C5C30A2EC21A0E7C1E35B651E27BD35825C84722935D2B3E3BD4A81B032DB` | `B83C5C30A2EC21A0E7C1E35B651E27BD35825C84722935D2B3E3BD4A81B032DB` | yes |
+| `cfg_edges.json` | `EEB2203A8C260F73E1E5C3F8FF3146E09090E7996038246384F4AED6B1F44E0F` | `EEB2203A8C260F73E1E5C3F8FF3146E09090E7996038246384F4AED6B1F44E0F` | yes |
+| `cfg_ranges.json` | `3DFFDFA94748D20CDE1ECFED94C97E88FD4DB6CF43C8B2C03B69AC80A82690FE` | `3DFFDFA94748D20CDE1ECFED94C97E88FD4DB6CF43C8B2C03B69AC80A82690FE` | yes |
+| `cfg_report.txt` | `729F1E21EF1B306F1C973F28E5BC366FC2BA2F2DB133F55E2A701C6B4B6DB269` | `729F1E21EF1B306F1C973F28E5BC366FC2BA2F2DB133F55E2A701C6B4B6DB269` | yes |
+| `cfg_reproducibility.json` | `9F4836F9001CD965E1011D594876167BE9CAF4D5439ABFFC53ED3FBFF89041E6` | `9F4836F9001CD965E1011D594876167BE9CAF4D5439ABFFC53ED3FBFF89041E6` | yes |
+
 ## External Research Reconciliation and New-Chat Handover

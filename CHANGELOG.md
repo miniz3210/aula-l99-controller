@@ -61,11 +61,38 @@ Decision gates:
 - Multi-root expansion: HOLD
 - Type 3 investigation: HOLD
 
-Next research task:
-- Read-only CFG frontier analysis of 70 pending queue records.
+### 12288/1024 bounded experiment — ACCEPTED (uncommitted)
+
+Implementation commit: `d324b641742b16a18ba8f3c4e1de8f35c575138f` — `research: add bounded 12288-1024 HFD CFG experiment`.
+
+Added:
+- New experimental CLI profile `--experimental-single-root-12288-blocks-1024` (profile name `single_root_12288_blocks_1024`). Requires exactly one root `0x60017490`, `max_instructions=12288`, `max_basic_blocks=1024`, all other budgets at `DEFAULT_BUDGETS` defaults. Output isolated under `local_analysis/cfg_experiments/single_root_12288_blocks_1024_run1/` and `..._run2/`.
+- `DEFAULT_BUDGETS` unchanged (`max_instructions` 4096, `max_basic_blocks` 512). Existing profiles unchanged.
+- Generated comparison `local_analysis/cfg_experiments/comparison_8192_vs_12288.json` comparing 8192/1024 vs 12288/1024 via existing CLI (`--compare-baseline-json`, `--compare-experiment-json`, `--compare-output`).
+
+Acceptance:
+- Binding budget: `max_basic_blocks` (hit first).
+- `bounded_graph_acceptance_status`: `PASS_BUDGET_TRUNCATED`.
+- Canonical blocks: 917 -> 1297.
+- Canonical instructions: 7132 -> 10016.
+- Canonical edges: 1179 -> 1634.
+- Accepted functions: 48 -> 52.
+- Queue discoveries: 264 -> 343.
+- Processed/resolved: 202 -> 253.
+- Pending blocks: 2 -> 14. Pending functions: 57 -> 65. Pending total: 59 -> 79.
+- Pending queue records: 62 -> 90.
+- Queue reconciliation: 253 + 90 = 343.
+- Prohibited-range access: 0.
+- Canonical safety counters zero.
+- Two deterministic runs; six matching artifact hashes (run1 == run2).
+
+Next research:
+- Read-only frontier analysis of 90 pending queue records representing 79 unique addresses.
+
+Next:
+- Decision gates remain: Change `DEFAULT_BUDGETS` HOLD, raise `max_basic_blocks` HOLD, add vector roots HOLD, multi-root expansion HOLD, Type 3 investigation HOLD, hardware flashing NO-GO.
 
 ### Next
-- Decision gates remain as recorded above: Increase `max_basic_blocks` HOLD, change `DEFAULT_BUDGETS` HOLD, add vector roots HOLD, multi-root expansion HOLD, commit experimental profile HOLD.
 
 ## v0.6.3 - 2026-11-10
 
