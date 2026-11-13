@@ -90,7 +90,43 @@ Next research:
 - Read-only frontier analysis of 90 pending queue records representing 79 unique addresses.
 
 Next:
-- Decision gates remain: Change `DEFAULT_BUDGETS` HOLD, raise `max_basic_blocks` HOLD, add vector roots HOLD, multi-root expansion HOLD, Type 3 investigation HOLD, hardware flashing NO-GO.
+
+### 12288/1536 diagnostic experiment — ACCEPTED (uncommitted)
+
+Implementation commit: `9c1204152ad56987250b8d9ad1aaec19f1dedcd7` — `research: add bounded 12288-1536 HFD CFG diagnostic experiment`.
+
+Added:
+- New experimental CLI profile `--experimental-single-root-12288-blocks-1536` (profile name `single_root_12288_blocks_1536`). Requires exactly one root `0x60017490`, `max_instructions=12288`, `max_basic_blocks=1536`, all other budgets at `DEFAULT_BUDGETS` defaults. Output isolated under `local_analysis/cfg_experiments/single_root_12288_blocks_1536_run1/` and `..._run2/`.
+- `DEFAULT_BUDGETS` unchanged (`max_instructions` 4096, `max_basic_blocks` 512). Existing profiles unchanged.
+- Generated comparison `local_analysis/cfg_experiments/comparison_12288_1024_vs_12288_1536.json` comparing 12288/1024 vs 12288/1536 via existing CLI (`--compare-baseline-json`, `--compare-experiment-json`, `--compare-output`).
+
+Acceptance:
+- Binding budget: `max_instructions` (hit first).
+- `bounded_graph_acceptance_status`: `PASS_BUDGET_TRUNCATED`.
+- Canonical blocks: 1297 -> 1330.
+- Canonical instructions: 10016 -> 10223.
+- Canonical edges: 1634 -> 1671.
+- Accepted functions: 52 -> 52.
+- Queue discoveries: 343 -> 348.
+- Processed/resolved: 253 -> 259.
+- Pending blocks: 14 -> 9. Pending functions: 65 -> 66. Pending total: 79 -> 75.
+- Pending queue records: 90 -> 89.
+- Queue reconciliation: 259 + 89 = 348; 152 + 107 + 89 = 348.
+- Pending block/function union = 75 unique pending items.
+- Prohibited-range access: 0.
+- Canonical safety counters zero.
+- Two deterministic runs; six matching artifact hashes (run1 == run2).
+- `cfg_summary.json` SHA-256 `9BBE30E2F10A2FB49A77C76D79E30DB75C872909B1EE637DCA07027CB26AF592`.
+- `cfg_reproducibility.json` SHA-256 `36076C84057B21F9A62F2A827A01F99AC0E9F6C4476F58B84563E52BA97DB8B9`.
+- Target and decoder identities unchanged (`A76806ADA9648D2672BBEBEAD8A9BB396C0BC6F3A0A071E22E99001AC3359D03`, `B6A4B5CBF5E7470AC82A96D19161EC803F3400DC4F65F09B3AECDE74B2A3326A`).
+- Self-loop `0x600174BC` -> `0x600174BC` retained.
+- Unresolved canonical indirect-flow edges: 52 (50 unresolved indirect jumps, 2 unresolved indirect calls).
+
+Next research:
+- Read-only static classification of 52 canonical unresolved indirect-flow edges: 50 unresolved indirect jumps, 2 unresolved indirect calls.
+
+Next:
+- Decision gates: Change `DEFAULT_BUDGETS` HOLD, raise `max_basic_blocks` HOLD, add vector roots HOLD, multi-root expansion HOLD, Type 3 investigation HOLD, hardware flashing NO-GO.
 
 ### Next
 

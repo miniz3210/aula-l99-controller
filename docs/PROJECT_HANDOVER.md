@@ -1788,4 +1788,109 @@ Read-only frontier analysis of 90 pending queue records representing 79 unique a
 | `cfg_report.txt` | `729F1E21EF1B306F1C973F28E5BC366FC2BA2F2DB133F55E2A701C6B4B6DB269` | `729F1E21EF1B306F1C973F28E5BC366FC2BA2F2DB133F55E2A701C6B4B6DB269` | yes |
 | `cfg_reproducibility.json` | `9F4836F9001CD965E1011D594876167BE9CAF4D5439ABFFC53ED3FBFF89041E6` | `9F4836F9001CD965E1011D594876167BE9CAF4D5439ABFFC53ED3FBFF89041E6` | yes |
 
+### 33. HFD CFG 12288/1536 diagnostic experiment (accepted)
+
+### 33.1 Implementation
+
+- Exact Git commit: `9c1204152ad56987250b8d9ad1aaec19f1dedcd7` — `research: add bounded 12288-1536 HFD CFG diagnostic experiment`.
+- New experimental CLI profile: `--experimental-single-root-12288-blocks-1536`
+  - Profile name: `single_root_12288_blocks_1536`
+  - Required root: `0x60017490` (exactly one)
+  - Required `max_instructions`: `12288`
+  - Required `max_basic_blocks`: `1536`
+  - All other budgets at `DEFAULT_BUDGETS` defaults
+  - Output isolated under `local_analysis/cfg_experiments/single_root_12288_blocks_1536_run1/` and `_run2/`
+- `DEFAULT_BUDGETS` unchanged: `max_instructions` remains `4096`, `max_basic_blocks` remains `512`.
+- Existing profiles unchanged (`default_bounded`, `single_root_8192`, `single_root_8192_blocks_1024`).
+
+### 33.2 Validation
+
+- Full unittest suite: 316 PASS.
+- `py_compile` PASS.
+- Two deterministic runs (run1 and run2).
+- Six matching artifact hashes (run1 == run2 byte-for-byte for all six standard outputs).
+- Queue reconciliation PASS: `259 + 89 = 348`; `152 + 107 + 89 = 348`.
+- Pending block/function union = 75 unique pending items.
+- Canonical safety counters zero: `prohibited_range_rejection_count == 0`, `unique_prohibited_target_count == 0`, `canonical_overlap_pair_count == 0`, `canonical_duplicate_instruction_ownership_count == 0`, `overlap_redecoded_byte_count == 0`.
+- `budget_exhaustion_status`: `max_instructions` (binding budget).
+- `bounded_graph_acceptance_status`: `PASS_BUDGET_TRUNCATED`.
+- Self-loop `0x600174BC` -> `0x600174BC` retained.
+- Unresolved canonical indirect-flow edges: 52.
+
+### 33.3 Accepted metrics (12288/1536 vs 12288/1024)
+
+| Metric | 12288/1024 | 12288/1536 | Delta |
+|--------|------------|------------|-------|
+| Root | `0x60017490` | `0x60017490` | unchanged |
+| `max_instructions` | 12288 | 12288 | unchanged |
+| `max_basic_blocks` | 1024 | 1536 | +512 |
+| Binding budget | `max_basic_blocks` | `max_instructions` | changed |
+| Canonical blocks | 1297 | 1330 | +33 |
+| Canonical instructions | 10016 | 10223 | +207 |
+| Canonical edges | 1634 | 1671 | +37 |
+| Accepted functions | 52 | 52 | 0 |
+| Reachable bytes | 20446 | 20446 | 0 |
+| Queue records | 343 | 348 | +5 |
+| Accepted queue records | 152 | 152 | 0 |
+| Unresolved queue records | 101 | 107 | +6 |
+| Pending queue records | 90 | 89 | -1 |
+| Deduplicated pending | 79 | 75 | -4 |
+
+### 33.4 Evidence classifications
+
+VERIFIED:
+- Deterministic bounded graph topology (run1 == run2, six matching artifact hashes).
+- Queue reconciliation (`259 + 89 = 348`).
+- Safety invariants (zero prohibited-range access, zero canonical overlaps, zero duplicate ownership/edges).
+
+UNKNOWN:
+- Complete firmware reachability.
+- Type 3 dispatcher.
+- Type 3 runtime mapping.
+- Icon-selection formula.
+- Patched Ghidra ABI correctness.
+
+### 33.5 Decision gates
+
+| Gate | Status | Condition |
+|------|--------|-----------|
+| Accounting repair | ACCEPTED | `PASS`, reconciliation enforcement, budget-exhaustion reporting |
+| 8192/512 experiment | ACCEPTED | `PASS_BUDGET_TRUNCATED`, binding budget `max_basic_blocks=512`, reconciliation PASS |
+| 8192/1024 experiment | ACCEPTED | `PASS_BUDGET_TRUNCATED`, binding budget `max_basic_blocks=1024`, reconciliation PASS |
+| 12288/1024 experiment | ACCEPTED | `PASS_BUDGET_TRUNCATED`, binding budget `max_basic_blocks=1024`, reconciliation PASS |
+| 12288/1536 diagnostic experiment | ACCEPTED | `PASS_BUDGET_TRUNCATED`, binding budget `max_instructions`, reconciliation PASS |
+| Further budget expansion | HOLD | `max_instructions` now binding; no additional accepted functions |
+| Change `DEFAULT_BUDGETS` | HOLD | |
+| Add vector roots | HOLD | |
+| Multi-root expansion | HOLD | |
+| Type 3 investigation | HOLD | |
+| Hardware flashing | NO-GO | |
+
+### 33.6 Next research
+
+Read-only static classification of 52 canonical unresolved indirect-flow edges:
+- 50 unresolved indirect jumps
+- 2 unresolved indirect calls
+
+### 33.7 Source JSON SHA-256 hashes
+
+- Baseline input (`single_root_12288_blocks_1024_run1/cfg_summary.json`): `64B1037BD855392E74E1FEFB40B4C09B1D5432E81355545D40BADAC96E25F14B`
+- Experiment input (`single_root_12288_blocks_1536_run1/cfg_summary.json`): `9BBE30E2F10A2FB49A77C76D79E30DB75C872909B1EE637DCA07027CB26AF592`
+
+### 33.8 Comparison JSON SHA-256
+
+- `local_analysis/cfg_experiments/comparison_12288_1024_vs_12288_1536.json`: generated via `scripts/research/hfd_cfg.py --compare-baseline-json ... --compare-experiment-json ... --compare-output ...`
+- Comparison output does NOT embed source artifact hashes; it records explicit `baseline_json_path` / `experiment_json_path` provenance paths per metric record.
+
+### 33.9 Six reproducibility hashes (run1 == run2)
+
+| Artifact | run1 SHA-256 | run2 SHA-256 | Match |
+|----------|--------------|--------------|-------|
+| `cfg_summary.json` | `9BBE30E2F10A2FB49A77C76D79E30DB75C872909B1EE637DCA07027CB26AF592` | `9BBE30E2F10A2FB49A77C76D79E30DB75C872909B1EE637DCA07027CB26AF592` | yes |
+| `cfg_nodes.json` | `43D82BED3FFDEF1DDDD56D3E210953D325E00B7320197CA0D268F7B78AE5A4BE` | `43D82BED3FFDEF1DDDD56D3E210953D325E00B7320197CA0D268F7B78AE5A4BE` | yes |
+| `cfg_edges.json` | `B8667EE401281634C1F01C7C20CEE5CD13AB2677CBCFA52FCF8A5C8CFAE81838` | `B8667EE401281634C1F01C7C20CEE5CD13AB2677CBCFA52FCF8A5C8CFAE81838` | yes |
+| `cfg_ranges.json` | `82B4AC31817B7F899652EC0DF661E315D844BB9F8599C129B5602E30F2236144` | `82B4AC31817B7F899652EC0DF661E315D844BB9F8599C129B5602E30F2236144` | yes |
+| `cfg_report.txt` | `6B7D4AD14561502B049DF92CC05B24B705178D779EF93FE7A9E6F270723E7ED5` | `6B7D4AD14561502B049DF92CC05B24B705178D779EF93FE7A9E6F270723E7ED5` | yes |
+| `cfg_reproducibility.json` | `36076C84057B21F9A62F2A827A01F99AC0E9F6C4476F58B84563E52BA97DB8B9` | `36076C84057B21F9A62F2A827A01F99AC0E9F6C4476F58B84563E52BA97DB8B9` | yes |
+
 ## External Research Reconciliation and New-Chat Handover
