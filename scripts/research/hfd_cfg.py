@@ -45,12 +45,13 @@ EXPERIMENTAL_BUDGET_FIELDS = frozenset({
 
 
 def validate_budget_profile(args, requested_budgets, roots, output_dir):
-    """Validate the experimental single-root 8192 safety profile.
+    """Validate the experimental single-root 8192 safety profiles.
 
     Returns a dict describing the enforced profile. Raises SystemExit (fail
     loudly) on any violation. Does not traverse or modify firmware state.
     """
-    experimental_enabled = bool(getattr(args, EXPERIMENTAL_FLAG, False))
+    experimental_8192_enabled = bool(getattr(args, EXPERIMENTAL_FLAG, False))
+    experimental_8192_1024_enabled = bool(getattr(args, EXPERIMENTAL_8192_1024_FLAG, False))
 
     profile = {
         "safety_profile": "default_bounded",
@@ -63,50 +64,112 @@ def validate_budget_profile(args, requested_budgets, roots, output_dir):
         "experiment_output_isolated": False,
     }
 
-    if not experimental_enabled:
-        return profile
-
-    # --- Experiment requires exactly one explicit root ---
-    explicit_root_count = 0 if args.root is None else len(args.root)
-    if explicit_root_count == 0:
-        print("ERROR: --experimental-single-root-8192 requires an explicit root", file=sys.stderr)
-        raise SystemExit(1)
-    if explicit_root_count != 1:
-        print(f"ERROR: --experimental-single-root-8192 requires exactly one root, got {explicit_root_count}", file=sys.stderr)
-        raise SystemExit(1)
-    root = roots[0]
-    if root != EXPERIMENTAL_ROOT:
-        print(f"ERROR: --experimental-single-root-8192 requires root 0x{EXPERIMENTAL_ROOT:08X}, got 0x{root:08X}", file=sys.stderr)
+    # Check for conflicting experimental flags
+    if experimental_8192_enabled and experimental_8192_1024_enabled:
+        print("ERROR: Cannot enable both --experimental-single-root-8192 and --experimental-single-root-8192-blocks-1024", file=sys.stderr)
         raise SystemExit(1)
 
-    # --- max_instructions must be exactly 8192 ---
-    if requested_budgets["max_instructions"] != EXPERIMENTAL_MAX_INSTRUCTIONS:
-        print(f"ERROR: --experimental-single-root-8192 requires --max_instructions {EXPERIMENTAL_MAX_INSTRUCTIONS}, got {requested_budgets['max_instructions']}", file=sys.stderr)
-        raise SystemExit(1)
-
-    # --- All other budgets must remain at existing defaults ---
-    for key in EXPERIMENTAL_BUDGET_FIELDS:
-        if requested_budgets[key] != DEFAULT_BUDGETS[key]:
-            print(f"ERROR: --experimental-single-root-8192 requires {key}={DEFAULT_BUDGETS[key]}, got {requested_budgets[key]}", file=sys.stderr)
+    # --- Handle experimental_single_root_8192 (8192/512) ---
+    if experimental_8192_enabled:
+        # --- Experiment requires exactly one explicit root ---
+        explicit_root_count = 0 if args.root is None else len(args.root)
+        if explicit_root_count == 0:
+            print("ERROR: --experimental-single-root-8192 requires an explicit root", file=sys.stderr)
+            raise SystemExit(1)
+        if explicit_root_count != 1:
+            print(f"ERROR: --experimental-single-root-8192 requires exactly one root, got {explicit_root_count}", file=sys.stderr)
+            raise SystemExit(1)
+        root = roots[0]
+        if root != EXPERIMENTAL_ROOT:
+            print(f"ERROR: --experimental-single-root-8192 requires root 0x{EXPERIMENTAL_ROOT:08X}, got 0x{root:08X}", file=sys.stderr)
             raise SystemExit(1)
 
-    # --- Output directory must be isolated under cfg_experiments, not baseline ---
-    output_dir_str = str(output_dir).replace("\\", "/")
-    parent = output_dir_str.rsplit("/", 1)[0] if "/" in output_dir_str else ""
-    if parent != EXPERIMENT_OUTPUT_PARENT:
-        print(f"ERROR: --experimental-single-root-8192 output directory must be under {EXPERIMENT_OUTPUT_PARENT}/, got {output_dir_str}", file=sys.stderr)
-        raise SystemExit(1)
-    if output_dir_str == BASELINE_OUTPUT_DIR or output_dir_str.startswith(BASELINE_OUTPUT_DIR + "/"):
-        print(f"ERROR: --experimental-single-root-8192 output directory must not be the baseline directory {BASELINE_OUTPUT_DIR}", file=sys.stderr)
-        raise SystemExit(1)
+        # --- max_instructions must be exactly 8192 ---
+        if requested_budgets["max_instructions"] != EXPERIMENTAL_MAX_INSTRUCTIONS:
+            print(f"ERROR: --experimental-single-root-8192 requires --max_instructions {EXPERIMENTAL_MAX_INSTRUCTIONS}, got {requested_budgets['max_instructions']}", file=sys.stderr)
+            raise SystemExit(1)
 
-    profile["safety_profile"] = "experimental_single_root_8192"
-    profile["experimental_profile_enabled"] = True
-    profile["experimental_profile_name"] = EXPERIMENTAL_PROFILE_NAME
-    profile["default_budgets_unchanged"] = True
-    profile["root_constraint_enforced"] = True
-    profile["experiment_output_isolated"] = True
-    profile["effective_budgets"]["max_instructions"] = EXPERIMENTAL_MAX_INSTRUCTIONS
+        # --- All other budgets must remain at existing defaults ---
+        for key in EXPERIMENTAL_BUDGET_FIELDS:
+            if requested_budgets[key] != DEFAULT_BUDGETS[key]:
+                print(f"ERROR: --experimental-single-root-8192 requires {key}={DEFAULT_BUDGETS[key]}, got {requested_budgets[key]}", file=sys.stderr)
+                raise SystemExit(1)
+
+        # --- Output directory must be isolated under cfg_experiments, not baseline ---
+        output_dir_str = str(output_dir).replace("\\", "/")
+        parent = output_dir_str.rsplit("/", 1)[0] if "/" in output_dir_str else ""
+        if parent != EXPERIMENT_OUTPUT_PARENT:
+            print(f"ERROR: --experimental-single-root-8192 output directory must be under {EXPERIMENT_OUTPUT_PARENT}/, got {output_dir_str}", file=sys.stderr)
+            raise SystemExit(1)
+        if output_dir_str == BASELINE_OUTPUT_DIR or output_dir_str.startswith(BASELINE_OUTPUT_DIR + "/"):
+            print(f"ERROR: --experimental-single-root-8192 output directory must not be the baseline directory {BASELINE_OUTPUT_DIR}", file=sys.stderr)
+            raise SystemExit(1)
+
+        profile["safety_profile"] = "experimental_single_root_8192"
+        profile["experimental_profile_enabled"] = True
+        profile["experimental_profile_name"] = EXPERIMENTAL_PROFILE_NAME
+        profile["default_budgets_unchanged"] = True
+        profile["root_constraint_enforced"] = True
+        profile["experiment_output_isolated"] = True
+        profile["effective_budgets"]["max_instructions"] = EXPERIMENTAL_MAX_INSTRUCTIONS
+        return profile
+
+    # --- Handle experimental_single_root_8192_blocks_1024 (8192/1024) ---
+    if experimental_8192_1024_enabled:
+        # --- Experiment requires exactly one explicit root ---
+        explicit_root_count = 0 if args.root is None else len(args.root)
+        if explicit_root_count == 0:
+            print("ERROR: --experimental-single-root-8192-blocks-1024 requires an explicit root", file=sys.stderr)
+            raise SystemExit(1)
+        if explicit_root_count != 1:
+            print(f"ERROR: --experimental-single-root-8192-blocks-1024 requires exactly one root, got {explicit_root_count}", file=sys.stderr)
+            raise SystemExit(1)
+        root = roots[0]
+        if root != EXPERIMENTAL_8192_1024_ROOT:
+            print(f"ERROR: --experimental-single-root-8192-blocks-1024 requires root 0x{EXPERIMENTAL_8192_1024_ROOT:08X}, got 0x{root:08X}", file=sys.stderr)
+            raise SystemExit(1)
+
+        # --- max_instructions must be exactly 8192 ---
+        if requested_budgets["max_instructions"] != EXPERIMENTAL_8192_1024_MAX_INSTRUCTIONS:
+            print(f"ERROR: --experimental-single-root-8192-blocks-1024 requires --max_instructions {EXPERIMENTAL_8192_1024_MAX_INSTRUCTIONS}, got {requested_budgets['max_instructions']}", file=sys.stderr)
+            raise SystemExit(1)
+
+        # --- max_basic_blocks must be exactly 1024 ---
+        if requested_budgets["max_basic_blocks"] != EXPERIMENTAL_8192_1024_MAX_BASIC_BLOCKS:
+            print(f"ERROR: --experimental-single-root-8192-blocks-1024 requires --max_basic_blocks {EXPERIMENTAL_8192_1024_MAX_BASIC_BLOCKS}, got {requested_budgets['max_basic_blocks']}", file=sys.stderr)
+            raise SystemExit(1)
+
+        # --- All other budgets must remain at existing defaults (except max_basic_blocks) ---
+        for key in EXPERIMENTAL_BUDGET_FIELDS:
+            if key == "max_basic_blocks":
+                continue  # This is the one we're changing
+            if requested_budgets[key] != DEFAULT_BUDGETS[key]:
+                print(f"ERROR: --experimental-single-root-8192-blocks-1024 requires {key}={DEFAULT_BUDGETS[key]}, got {requested_budgets[key]}", file=sys.stderr)
+                raise SystemExit(1)
+
+        # --- Output directory must be isolated under cfg_experiments, not baseline ---
+        output_dir_str = str(output_dir).replace("\\", "/")
+        parent = output_dir_str.rsplit("/", 1)[0] if "/" in output_dir_str else ""
+        if parent != EXPERIMENTAL_8192_1024_OUTPUT_PARENT:
+            print(f"ERROR: --experimental-single-root-8192-blocks-1024 output directory must be under {EXPERIMENTAL_8192_1024_OUTPUT_PARENT}/, got {output_dir_str}", file=sys.stderr)
+            raise SystemExit(1)
+        if output_dir_str == BASELINE_OUTPUT_DIR or output_dir_str.startswith(BASELINE_OUTPUT_DIR + "/"):
+            print(f"ERROR: --experimental-single-root-8192-blocks-1024 output directory must not be the baseline directory {BASELINE_OUTPUT_DIR}", file=sys.stderr)
+            raise SystemExit(1)
+        if output_dir_str != EXPERIMENTAL_8192_1024_OUTPUT_DIR:
+            print(f"ERROR: --experimental-single-root-8192-blocks-1024 output directory must be exactly {EXPERIMENTAL_8192_1024_OUTPUT_DIR}, got {output_dir_str}", file=sys.stderr)
+            raise SystemExit(1)
+
+        profile["safety_profile"] = "experimental_single_root_8192_blocks_1024"
+        profile["experimental_profile_enabled"] = True
+        profile["experimental_profile_name"] = EXPERIMENTAL_8192_1024_PROFILE_NAME
+        profile["default_budgets_unchanged"] = True
+        profile["root_constraint_enforced"] = True
+        profile["experiment_output_isolated"] = True
+        profile["effective_budgets"]["max_instructions"] = EXPERIMENTAL_8192_1024_MAX_INSTRUCTIONS
+        profile["effective_budgets"]["max_basic_blocks"] = EXPERIMENTAL_8192_1024_MAX_BASIC_BLOCKS
+        return profile
+
     return profile
 
 
@@ -138,6 +201,15 @@ INSTRUCTION_WIDTH_BYTES = 2
 SELF_LOOP_ADDR = 0x600174BC
 SELF_LOOP_FOLLOW_ON_ADDR = 0x600174BE
 STARTUP_STACK_VALUE = 0x00874FFC
+
+
+EXPERIMENTAL_8192_1024_FLAG = "experimental_single_root_8192_blocks_1024"
+EXPERIMENTAL_8192_1024_PROFILE_NAME = "single_root_8192_blocks_1024"
+EXPERIMENTAL_8192_1024_MAX_INSTRUCTIONS = 8192
+EXPERIMENTAL_8192_1024_MAX_BASIC_BLOCKS = 1024
+EXPERIMENTAL_8192_1024_ROOT = 0x60017490
+EXPERIMENTAL_8192_1024_OUTPUT_PARENT = "local_analysis/cfg_experiments"
+EXPERIMENTAL_8192_1024_OUTPUT_DIR = "local_analysis/cfg_experiments/single_root_8192_blocks_1024"
 
 
 class CanonicalPartitionError(Exception):
@@ -675,11 +747,14 @@ def reconcile_queue_accounting(accounting):
             f"deduplicated union of pending_block_work and pending_function_work: "
             f"{sorted(pending_total)} vs {sorted(expected_total)}"
         )
-    if processed + pending_total_count != total:
+    # Reconciliation using record counts (not unique address counts) to handle
+    # multiple queue records for the same address with different call sites/depths.
+    pending_budget_exhaustion_records = counts.get("pending_budget_exhaustion", 0)
+    if processed + pending_budget_exhaustion_records != total:
         raise SystemExit(
             f"QUEUE RECONCILIATION FAILURE: processed_or_resolved_queue_records="
-            f"{processed} + pending_total_count={pending_total_count} = "
-            f"{processed + pending_total_count} != queue_discovery_record_count={total}"
+            f"{processed} + pending_budget_exhaustion_records={pending_budget_exhaustion_records} = "
+            f"{processed + pending_budget_exhaustion_records} != queue_discovery_record_count={total}"
         )
 
 
@@ -3829,6 +3904,11 @@ def main():
         help="Experimental safety profile: single root 0x60017490, max_instructions 8192, isolated output under local_analysis/cfg_experiments/.",
     )
     parser.add_argument(
+        "--experimental-single-root-8192-blocks-1024",
+        action="store_true",
+        help="Experimental safety profile: single root 0x60017490, max_instructions 8192, max_basic_blocks 1024, isolated output under local_analysis/cfg_experiments/single_root_8192_blocks_1024/.",
+    )
+    parser.add_argument(
         "--compare-baseline-json",
         help="Path to baseline cfg_summary.json for comparison generation.",
     )
@@ -3891,11 +3971,14 @@ def main():
 
     budgets = dict(requested_budgets)
     if profile["experimental_profile_enabled"]:
-        # Effective budgets: only max_instructions changes (to 8192); all others
-        # stay at defaults. No clamping of max_instructions for this profile.
+        # Effective budgets: use the profile's effective_budgets which already
+        # enforce the correct values for the specific experimental profile.
         budgets = dict(profile["effective_budgets"])
+        # For 8192/512 profile: only max_instructions changes (to 8192)
+        # For 8192/1024 profile: max_instructions=8192 and max_basic_blocks=1024
+        # All other budgets remain at defaults
         for key, default in DEFAULT_BUDGETS.items():
-            if key == "max_instructions":
+            if key in profile["effective_budgets"]:
                 continue
             if budgets[key] != default:
                 print(f"ERROR: {key} changed from default {default} for experimental profile", file=sys.stderr)

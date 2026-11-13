@@ -33,6 +33,12 @@ from hfd_cfg import (  # noqa: E402
     EXPERIMENTAL_ROOT,
     EXPERIMENTAL_FLAG,
     EXPERIMENTAL_PROFILE_NAME,
+    EXPERIMENTAL_8192_1024_FLAG,
+    EXPERIMENTAL_8192_1024_PROFILE_NAME,
+    EXPERIMENTAL_8192_1024_MAX_INSTRUCTIONS,
+    EXPERIMENTAL_8192_1024_MAX_BASIC_BLOCKS,
+    EXPERIMENTAL_8192_1024_ROOT,
+    EXPERIMENTAL_8192_1024_OUTPUT_DIR,
     build_queue_accounting,
     reconcile_queue_accounting,
     candidate_queue_metrics,
@@ -725,8 +731,9 @@ class TestAcceptanceStatus(unittest.TestCase):
 
 class FakeArgs:
     """Synthetic argparse namespace for budget-profile validation tests."""
-    def __init__(self, experimental=False, root=None, **budgets):
+    def __init__(self, experimental=False, experimental_8192_1024=False, root=None, **budgets):
         self.experimental_single_root_8192 = experimental
+        self.experimental_single_root_8192_blocks_1024 = experimental_8192_1024
         self.root = root
         for key, value in budgets.items():
             setattr(self, key, value)
@@ -926,6 +933,140 @@ class TestExperimentalBudgetProfile(unittest.TestCase):
         # This suite itself is part of the 51; assert the module imports cleanly.
         import hfd_cfg
         self.assertTrue(hasattr(hfd_cfg, "validate_budget_profile"))
+
+    # --- New tests for 8192/1024 experimental profile ---
+    def test_23_8192_1024_flag_valid_accepted(self):
+        args = FakeArgs(experimental=False, root=[0x60017490], **self.defaults)
+        setattr(args, EXPERIMENTAL_8192_1024_FLAG, True)
+        args.max_instructions = 8192
+        args.max_basic_blocks = 1024
+        budgets = dict(self.defaults)
+        budgets["max_instructions"] = 8192
+        budgets["max_basic_blocks"] = 1024
+        profile = validate_budget_profile(args, budgets, [0x60017490], EXPERIMENTAL_8192_1024_OUTPUT_DIR)
+        self.assertEqual(profile["safety_profile"], "experimental_single_root_8192_blocks_1024")
+        self.assertTrue(profile["experimental_profile_enabled"])
+        self.assertEqual(profile["experimental_profile_name"], "single_root_8192_blocks_1024")
+        self.assertTrue(profile["default_budgets_unchanged"])
+        self.assertTrue(profile["root_constraint_enforced"])
+        self.assertTrue(profile["experiment_output_isolated"])
+        self.assertEqual(profile["effective_budgets"]["max_instructions"], 8192)
+        self.assertEqual(profile["effective_budgets"]["max_basic_blocks"], 1024)
+
+    def test_24_8192_1024_flag_without_root_fails(self):
+        args = FakeArgs(experimental=False, root=None, **self.defaults)
+        setattr(args, EXPERIMENTAL_8192_1024_FLAG, True)
+        args.max_instructions = 8192
+        args.max_basic_blocks = 1024
+        budgets = dict(self.defaults)
+        budgets["max_instructions"] = 8192
+        budgets["max_basic_blocks"] = 1024
+        with self.assertRaises(SystemExit):
+            validate_budget_profile(args, budgets, None, EXPERIMENTAL_8192_1024_OUTPUT_DIR)
+
+    def test_25_8192_1024_flag_different_root_fails(self):
+        args = FakeArgs(experimental=False, root=[0x60010000], **self.defaults)
+        setattr(args, EXPERIMENTAL_8192_1024_FLAG, True)
+        args.max_instructions = 8192
+        args.max_basic_blocks = 1024
+        budgets = dict(self.defaults)
+        budgets["max_instructions"] = 8192
+        budgets["max_basic_blocks"] = 1024
+        with self.assertRaises(SystemExit):
+            validate_budget_profile(args, budgets, [0x60010000], EXPERIMENTAL_8192_1024_OUTPUT_DIR)
+
+    def test_26_8192_1024_flag_multiple_roots_fails(self):
+        args = FakeArgs(experimental=False, root=[0x60017490, 0x600449b0], **self.defaults)
+        setattr(args, EXPERIMENTAL_8192_1024_FLAG, True)
+        args.max_instructions = 8192
+        args.max_basic_blocks = 1024
+        budgets = dict(self.defaults)
+        budgets["max_instructions"] = 8192
+        budgets["max_basic_blocks"] = 1024
+        with self.assertRaises(SystemExit):
+            validate_budget_profile(args, budgets, [0x60017490, 0x600449b0], EXPERIMENTAL_8192_1024_OUTPUT_DIR)
+
+    def test_27_8192_1024_flag_max_instructions_not_8192_fails(self):
+        args = FakeArgs(experimental=False, root=[0x60017490], **self.defaults)
+        setattr(args, EXPERIMENTAL_8192_1024_FLAG, True)
+        budgets = dict(self.defaults)
+        budgets["max_basic_blocks"] = 1024
+        # max_instructions not set to 8192 (default is 4096)
+        with self.assertRaises(SystemExit):
+            validate_budget_profile(args, budgets, [0x60017490], EXPERIMENTAL_8192_1024_OUTPUT_DIR)
+
+    def test_28_8192_1024_flag_max_basic_blocks_not_1024_fails(self):
+        args = FakeArgs(experimental=False, root=[0x60017490], **self.defaults)
+        setattr(args, EXPERIMENTAL_8192_1024_FLAG, True)
+        args.max_instructions = 8192
+        budgets = dict(self.defaults)
+        budgets["max_instructions"] = 8192
+        # max_basic_blocks not set to 1024 (default is 512)
+        with self.assertRaises(SystemExit):
+            validate_budget_profile(args, budgets, [0x60017490], EXPERIMENTAL_8192_1024_OUTPUT_DIR)
+
+    def test_29_8192_1024_flag_changed_other_budgets_fail(self):
+        args = FakeArgs(experimental=False, root=[0x60017490], **self.defaults)
+        setattr(args, EXPERIMENTAL_8192_1024_FLAG, True)
+        args.max_instructions = 8192
+        args.max_basic_blocks = 1024
+        budgets = dict(self.defaults)
+        budgets["max_instructions"] = 8192
+        budgets["max_basic_blocks"] = 1024
+        budgets["max_functions"] = 128  # changed
+        with self.assertRaises(SystemExit):
+            validate_budget_profile(args, budgets, [0x60017490], EXPERIMENTAL_8192_1024_OUTPUT_DIR)
+
+    def test_30_8192_1024_flag_baseline_output_dir_fails(self):
+        args = FakeArgs(experimental=False, root=[0x60017490], **self.defaults)
+        setattr(args, EXPERIMENTAL_8192_1024_FLAG, True)
+        args.max_instructions = 8192
+        args.max_basic_blocks = 1024
+        budgets = dict(self.defaults)
+        budgets["max_instructions"] = 8192
+        budgets["max_basic_blocks"] = 1024
+        with self.assertRaises(SystemExit):
+            validate_budget_profile(args, budgets, [0x60017490], "local_analysis/cfg")
+
+    def test_31_8192_1024_flag_output_outside_cfg_experiments_fails(self):
+        args = FakeArgs(experimental=False, root=[0x60017490], **self.defaults)
+        setattr(args, EXPERIMENTAL_8192_1024_FLAG, True)
+        args.max_instructions = 8192
+        args.max_basic_blocks = 1024
+        budgets = dict(self.defaults)
+        budgets["max_instructions"] = 8192
+        budgets["max_basic_blocks"] = 1024
+        with self.assertRaises(SystemExit):
+            validate_budget_profile(args, budgets, [0x60017490], "local_analysis/other")
+
+    def test_32_8192_1024_flag_wrong_output_dir_fails(self):
+        args = FakeArgs(experimental=False, root=[0x60017490], **self.defaults)
+        setattr(args, EXPERIMENTAL_8192_1024_FLAG, True)
+        args.max_instructions = 8192
+        args.max_basic_blocks = 1024
+        budgets = dict(self.defaults)
+        budgets["max_instructions"] = 8192
+        budgets["max_basic_blocks"] = 1024
+        with self.assertRaises(SystemExit):
+            validate_budget_profile(args, budgets, [0x60017490], "local_analysis/cfg_experiments/single_root_8192")
+
+    def test_33_both_experimental_flags_conflict(self):
+        args = FakeArgs(experimental=True, root=[0x60017490], **self.defaults)
+        setattr(args, EXPERIMENTAL_8192_1024_FLAG, True)
+        args.max_instructions = 8192
+        args.max_basic_blocks = 1024
+        budgets = dict(self.defaults)
+        budgets["max_instructions"] = 8192
+        budgets["max_basic_blocks"] = 1024
+        with self.assertRaises(SystemExit):
+            validate_budget_profile(args, budgets, [0x60017490], EXPERIMENTAL_8192_1024_OUTPUT_DIR)
+
+    def test_34_8192_1024_constants_defined(self):
+        self.assertEqual(EXPERIMENTAL_8192_1024_MAX_INSTRUCTIONS, 8192)
+        self.assertEqual(EXPERIMENTAL_8192_1024_MAX_BASIC_BLOCKS, 1024)
+        self.assertEqual(EXPERIMENTAL_8192_1024_ROOT, 0x60017490)
+        self.assertEqual(EXPERIMENTAL_8192_1024_PROFILE_NAME, "single_root_8192_blocks_1024")
+        self.assertEqual(EXPERIMENTAL_8192_1024_OUTPUT_DIR, "local_analysis/cfg_experiments/single_root_8192_blocks_1024")
 
 
 class FakeQueueBuilder:
