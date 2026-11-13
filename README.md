@@ -22,6 +22,17 @@ This is an active reverse-engineering and prototyping project. The present miles
 - No claim of safe firmware modification or flashing follows from this analysis.
 - Current hardware-write status remains blocked pending offline patch validation and recovery review.
 
+**Current CFG status (2026-11-13)**:
+- The committed 4096 bounded graph (`3ec58fd` implementation, `0387967` documentation) remains the accepted baseline checkpoint.
+- Accounting repair commit: `59696c1cac8c597427374af176fef9e2ab6859bd` — `fix: reconcile bounded HFD CFG queue accounting` (uncommitted).
+- Accounting repair: ACCEPTED. Final acceptance PASS. Full unittest suite: 262 passing. CFG partition tests: 99 passing. Python compilation: PASS.
+- Baseline artifacts unchanged. Target and decoder SHA256 unchanged. No prohibited-range access. No canonical overlaps. No duplicate canonical ownership or edges.
+- 8192 bounded experiment: ACCEPTED. Root `0x60017490`, `max_instructions=8192`, binding budget `max_basic_blocks=512`. Acceptance `PASS_BUDGET_TRUNCATED`. Canonical blocks: 666. Canonical instructions: 5238. Accepted functions: 22. Candidates: 77. Queue discoveries: 223. Processed/resolved: 153. Pending blocks: 12. Pending functions: 58. Pending total: 70. Reconciliation: 153 + 70 = 223. Self-loop count: 1. Prohibited-range access: 0.
+- Reproducibility: two independent fresh-directory runs, six matching artifact hashes. Comparison JSON SHA256: `92D61DD6CF5E9E965965218B9A7BDB9CCA107DDF1D3C20DAE2849FA7AA318310`.
+- Decision gates: Increase `max_basic_blocks` HOLD. Change `DEFAULT_BUDGETS` HOLD. Add vector roots HOLD. Multi-root expansion HOLD. Type 3 investigation HOLD.
+- Generated experiment artifacts remain ignored local files under `local_analysis/cfg_experiments/`.
+- Ubuntu/Ghidra remains an independent verification environment; its startup-region checkpoint is retained.
+
 ## Goal / Project objective
 
 Open-source AULA L99 screen/controller research aimed at turning the built-in 320x480 touchscreen into a Stream Deck-style control surface. The approach is firmware-free (input bridge first), safety-first and read-only by default. Native page/widget and runtime-feedback research is documented separately; no hardware write is permitted under the current NO-GO decision.
@@ -243,14 +254,58 @@ utility for `HFD_Code_V2.3.bin`. It reuses the local third-party `mcdis.py` deco
 instruction decoding and never modifies the input binary. All generated output is written
 under `local_analysis/cfg/` and is ignored by Git (local artifacts only).
 
-`tests/test_hfd_cfg_partition.py` provides 51 standard-library unit tests covering canonical
-partitioning, edge remap/validation, byte accounting, evidence classification, and
-acceptance-status determination. No vendor firmware is embedded in the tests.
+`tests/test_hfd_cfg_partition.py` provides 99 standard-library unit tests covering canonical
+partitioning, edge remap/validation, byte accounting, evidence classification,
+acceptance-status determination, queue accounting, reconciliation, and comparison
+generation. No vendor firmware is embedded in the tests.
 
 Acceptance status `PASS_BUDGET_TRUNCATED` means the bounded observed graph is internally
-canonical and reproducible, but traversal stopped because the 4096-instruction budget was
+canonical and reproducible, but traversal stopped because the instruction budget was
 exhausted. The graph is accepted as bounded, correct within its scope, and not
 complete-firmware coverage.
+
+### Queue-accounting output schema
+
+Canonical and reproducibility outputs now include a deterministic, machine-readable
+queue-accounting section. The shared helper `build_queue_accounting()` produces:
+
+- `queue_discovery_records` — deterministically sorted records, each containing
+  `target_address`, `call_site_address`, `depth`, `work_type`, `reason`, `function_id`,
+  and `final_status`; absent values are represented as `null`.
+- `queue_discovery_record_count`
+- `queue_final_status_counts`
+- `pending_block_work`, `pending_block_work_count`
+- `pending_function_work`, `pending_function_work_count`
+- `pending_total_work`, `pending_total_work_count`
+- `processed_or_resolved_queue_records`
+- `repeated_queue_discovery_count`
+- `queue_reconciliation_status`
+
+`reconcile_queue_accounting()` enforces all queue-accounting equations
+(`processed_or_resolved + pending_total == discovery_record_count`) before output is
+written, and fails loudly on mismatch.
+
+### Comparison CLI
+
+`generate_comparison_4096_vs_8192()` and the following CLI options compare a baseline
+canonical summary against an experiment canonical summary:
+
+- `--compare-baseline-json <path>` — baseline canonical summary JSON.
+- `--compare-experiment-json <path>` — experiment canonical summary JSON.
+- `--compare-output <path>` — output path for the comparison JSON.
+
+Comparison output includes explicit provenance paths for both inputs and fails loudly when
+required fields are missing. Optional unavailable metrics use `null` together with
+`value_present: false` and a `reason`. Candidate-versus-queue metrics
+(`queued_candidates_scheduled_pending`, `queued_candidates_not_scheduled_depth_limit`,
+`queued_candidates_without_function_work_record`) are reported for both sides.
+
+### Binding-budget exhaustion
+
+Block-loop exhaustion now reports the actual exhausted budget reason, for example
+`budget_max_basic_blocks`, instead of the hardcoded `budget_max_instructions`. Generic
+`budget_*` reasons and `pending_unprocessed_budget_exhaustion` are classified as
+`pending_budget_exhaustion`.
 
 Independent cross-validation was performed with Ghidra `analyzeHeadless` and the third-party
 ghidra-mcore processor (MCORE:LE:32:default) on an Ubuntu x86_64 host. This Ghidra

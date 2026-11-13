@@ -12,7 +12,8 @@ Turn the AULA L99 keyboard's built-in 320x480 touchscreen into a Stream Deck-sty
 - Branch: main
 - Remote: miniz3210/aula-l99-controller.git
 - Current published release: v0.1.1
-- HEAD commit: 3ec58fd (research: add bounded canonical MCore CFG tooling)
+- HEAD commit: `0387967` — `docs: record bounded canonical MCore CFG checkpoint`
+- Working tree: modified (`scripts/research/hfd_cfg.py`, `tests/test_hfd_cfg_partition.py`); nothing staged, no commits created.
 - Local ignored research directory: tools/softce-aula-l99-research
 - Vendor binaries and extracted artifacts are local only and ignored by Git.
 
@@ -594,6 +595,8 @@ Keep all work read-only. Do not press Start in either updater. Do not flash eith
 
 Do not repeat completed work unless new evidence requires it: baseline inventory, updater SHA256 collection, Process Monitor child-process mapping, launch-only screen updater capture, generic strings scan of the 162 MB updater, idle memory dump, generic Enigma detection, extraction of HFD_ISP_TOOL_V1.31.exe, extraction of HFD_Code_V2.2.bin, extraction of the local Chinese 1.0.1.4 HFD_Code_V2.3.bin, Flash.ini chip-database analysis, V2.3 difference comparison, raw full-file search for UartTFT-II_Flash.bin inside the updater, investigation of the nineteen 1536-byte evb*.tmp files as firmware payloads, or provenance claims from the softce working-directory path.
 
+Uncommitted working-tree changes exist in `scripts/research/hfd_cfg.py` and `tests/test_hfd_cfg_partition.py`. These fix queue accounting (`build_queue_accounting`, `reconcile_queue_accounting`), block-loop exhaustion reporting (`budget_max_basic_blocks` instead of `budget_max_instructions`), the deterministic queue-record schema, candidate-versus-queue metrics, and comparison generation (`generate_comparison_4096_vs_8192`, `--compare-baseline-json`, `--compare-experiment-json`, `--compare-output`). Validation: 99 tests pass, py_compile passes, all six baseline hashes unchanged, experiment runs 1 and 2 deterministic, queue_discovery_record_count = 223, reconciliation 153 + 70 = 223, comparison JSON SHA-256 92D61DD6CF5E9E965965218B9A7BDB9CCA107DDF1D3C20DAE2849FA7AA318310. Do not commit, tag, or push without explicit approval.
+
 Begin with read-only structural analysis of the official UartTFT-II_Flash.bin to produce a verified region map (offsets, lengths, signatures or magic values, image/resource regions, page-description records, touch-record areas, string/font/language regions, executable-code candidates, checksums or validation fields, erased or padding regions). Inspect existing softce repository documentation and tools for commands that already parse UartTFT-II_Flash.bin before creating new scripts; exclude .venv, __pycache__, node_modules, binary captures, large dumps, and generated output directories from broad searches. Present the next command before moving forward. Explicitly distinguish facts, hypotheses, and unverified assumptions in every response.
 ```
 
@@ -779,6 +782,260 @@ Future integration direction:
 
 Do not implement Companion or OpenDeck integration in this task.
 
+## 31. Handover — 2026-11-12 — CFG Checkpoint, Ubuntu/Ghidra Verification, 8192 Experiment, Accounting Repair Task
+
+### 31.1 Current repository state
+
+- Branch: main
+- HEAD: `59696c1cac8c597427374af176fef9e2ab6859bd` — `fix: reconcile bounded HFD CFG queue accounting` (accounting repair commit)
+- Working tree modifications (intentional, pre-existing):
+  - `docs/PROJECT_HANDOVER.md`, `README.md`, `CHANGELOG.md` — accounting repair documentation (this task; unstaged)
+- Nothing staged.
+
+### 31.2 Completed Ubuntu/Ghidra independent startup verification
+
+An independent verification host (Ubuntu x86_64, OpenJDK 21, Ghidra 12.1.4, REA 6.9.0, ghidra-mcore commit `2f32468f68c3b0eccbc875a26fd0a5769d3bfe91`, language `MCORE:LE:32:default`) was used to verify the startup region of HFD Code V2.3.
+
+- Verified fixture range: `0x60017490` through `0x600174BF` (48 bytes)
+- Fixture SHA-256: `F241FCF814F1CC6D654C4AEC270E600A1DF18130ABF87395C0562CFE7DF332DF`
+- mcdis listing SHA-256: `9913A3F100B445D51E45FCB1E484179C7B45A506FCF482A5597BBAACE9AE6DC5`
+- Ghidra listing: 24 lines, SHA-256 `C24D46A5B6E0DE97E8804C910F6265AC48C3D8A11E916173AA1A80D8F496C9C1`
+- Full-startup bounded output SHA-256: `99F028D2857B5F08ECD13DAA82DD175F26AE2D41C004B210E16CE21300404188`
+
+Verified startup observations:
+- `0x60017490`: `lrw r1, literal at 0x600174C0`
+- `0x600174C0`: `0x00874FFC`
+- `0x60017492`: `mov r0, r1`
+- `0x60017494`: `lrw r1, literal at 0x600174C4`
+- `0x600174C4`: `0x60010000`
+- `0x60017496`: `mtcr r1, VBR`
+- `0x60017498`: `mfcr r2, VBR`
+- `0x6001749A`–`0x600174B6`: register-clearing sequence
+- `0x600174B8`: call through literal at `0x600174C8` → `0x60045150` (verified)
+- `0x600174BA`: call through literal at `0x600174CC` → `0x600449B0` (verified)
+- Verified self-loop: `0x600174BC` → `0x600174BC`
+
+Local Ghidra compatibility patch:
+- Installed `mcore_le.cspec` required one local patch: output `pentry maxsize` changed from 1 to 4 for r2.
+- Patched `mcore_le.cspec` SHA-256: `296861E645DF2A7FC496EAAD84067C046D7604E27213C6C9B992C0C70E62E8E4`
+- This patch allowed Ghidra 12.1.4 to load the compiler specification.
+- The patch is NOT vendor-confirmed ABI evidence. ABI correctness remains UNKNOWN.
+- Do not treat decompiler argument, return-value, or calling-convention output as verified evidence.
+
+Compiled SLEIGH artifacts:
+- `mcore_le.sla`: 8834 bytes, SHA-256 `33F759B82C787135277DB022AFA5662A8A5CBDF19CA3E52896016F76E4B03F84`
+- `mcore_be.sla`: 8818 bytes, SHA-256 `5EC072995C10842C15F17E99EA0D1E2CD5271DFD259A188DF964336506C9E31B`
+
+### 31.3 Experimental single-root 8192 safety profile (implementation completed today)
+
+The working copy adds a constrained experimental profile:
+- CLI flag: `--experimental-single-root-8192`
+- Profile name: `experimental_single_root_8192`
+- Required root: `0x60017490` (exactly one)
+- Required `max_instructions`: `8192`
+- All other budgets remain at `DEFAULT_BUDGETS` defaults (including `max_basic_blocks = 512`)
+- Output isolated under `local_analysis/cfg_experiments/`
+- `DEFAULT_BUDGETS` unchanged; normal default `max_instructions` remains `4096`
+- Profile audited as safe; tests after profile work: 73 passing (before latest accounting repair task)
+
+### 31.4 Genuine 8192 experiment completed today
+
+Command:
+```
+.venv-analysis\Scripts\python.exe scripts\research\hfd_cfg.py --root 0x60017490 --max_instructions 8192 --experimental-single-root-8192 --output-dir local_analysis\cfg_experiments\single_root_8192
+```
+
+Requested and effective `max_instructions`: 8192. All other budgets unchanged.
+
+**Binding budget**: `max_basic_blocks = 512` (hit first, not `max_instructions`).
+
+**Experiment classification originally reported**: `PASS_DIFFERENT_BUDGET_LIMIT` — **Do not present this as fully accepted** because queue and pending accounting in the generated summary was later proven invalid.
+
+**Canonical graph results (structurally usable, deterministic)**:
+- Source traversal nodes: 512 (+163 from 4096)
+- Source instruction occurrences: 6114 (+2018)
+- Source unique instructions: 5238 (+1867)
+- Source-node multiply-owned count: 854 (+146), max ownership: 3
+- Canonical blocks: 666 (+191)
+- Canonical instructions: 5238 (+1867)
+- Canonical edges: 869 (+264)
+- Unique reachable bytes: 10476 (+3734)
+- Accepted functions: 22 (unchanged)
+- Unique direct-call candidates: 77 (+11)
+- Accepted candidates: 21 (unchanged)
+- Queued candidates: 56 (+11)
+- Unresolved edges: 32 (+18)
+- Outside-observed-map target edges: 154 (+11)
+- Return edges: 15 (unchanged)
+- Self-loop edges: 1 (unchanged)
+- Canonical overlap: 0
+- Duplicate canonical instruction ownership: 0
+- Duplicate canonical edges: 0
+- Prohibited-range access: 0
+- Target SHA-256 unchanged
+- Two runs produced deterministic graph-output hashes
+
+**New queued candidates observed at 8192** (do not infer purposes):
+- `0x600221C0`, `0x600225EC`, `0x600235EC`, `0x60027C7C`, `0x6002F6B0`, `0x6002FCA0`
+- `0x60032B28`, `0x60032DD0`, `0x60034B60`, `0x60034D54`, `0x6004C412`
+
+**8192 output hashes from the invalid-accounting run** (identify preserved artifacts; do NOT treat as accepted queue-accounting outputs):
+- `cfg_summary.json`: `C2C9634DEACDCA6569DA481ABBA503CE6688976E28916DC7F603A5DFF94552D7`
+- `cfg_reproducibility.json`: `0159CE92D9142EFDF0B32374208232B665BC132D4D1D32DBEE797DB13548BDF6`
+- `comparison_4096_vs_8192.json`: `743CE281D18AC4222EF06F1F6D14786C5ACCA5DA87E1D0BC81046984EA7AF7F2`
+
+### 31.5 Confirmed queue/pending accounting defects (provenance audit: EXPERIMENT OUTPUT INVALID)
+
+Scope of invalidity: **Queue and pending accounting only.**
+
+**Still usable (deterministic, structurally valid)**:
+- `cfg_nodes.json`, `cfg_edges.json`, `cfg_ranges.json`
+- Canonical graph metrics and topology
+- Structural graph expansion observations
+- Target and safety counters
+- Deterministic topology evidence
+
+**Not usable (invalid)**:
+- `queue_final_status_counts` (hardcoded `{}` in baseline, partially populated but untrusted in 8192)
+- `pending_block_work`, `pending_block_count`, `pending_function_work`, `pending_function_count`, `pending_total_work`, `pending_total_count` (hardcoded zeros in baseline)
+- `processed_or_resolved_queue_records` (hardcoded 0 in baseline)
+- `pending` fields copied into `comparison_4096_vs_8192.json`
+- Final experiment acceptance decision based on those fields
+
+**Root causes (confirmed in `scripts/research/hfd_cfg.py`)**:
+1. `build_canonical_summary` hardcodes zero/empty values for all queue/pending fields.
+2. `queue_discovery_record_count` is real (223 in 8192 experiment, derived from `len(builder.queued_work)`).
+3. Raw queue records are not persisted in canonical outputs.
+4. Reconciliation skips validation when `queue_final_status_counts` is empty.
+5. Block-loop exhaustion records `budget_max_instructions` even when the actual exhausted budget is `max_basic_blocks`.
+6. Traversal implementation DID preserve work in `builder.queued_work`.
+7. No evidence proves traversal work itself was dropped.
+8. Canonical graph topology remains valid.
+
+### 31.6 Current exact next repair task (Windows main development machine, Kilo Code)
+
+**Repair canonical queue and pending accounting.** The repair must:
+
+1. Extract one shared queue-accounting helper from the valid legacy `_build_output` logic.
+2. Use the helper in canonical summary, report, preview, and reproducibility output.
+3. Persist deterministic `queue_discovery_records`.
+4. Replace hardcoded queue and pending zero values.
+5. Require fail-loud reconciliation even when status counts are empty.
+6. Replace hardcoded `budget_max_instructions` with the actual exhausted budget: `budget_<budget_name>`.
+7. Classify all `budget_*` reasons as `pending_budget_exhaustion`.
+8. Add tests for `max_instructions`, `max_basic_blocks`, `max_functions`, `max_decoded_bytes`, pending block/function preservation, queue reconciliation, deterministic ordering, and comparison provenance.
+9. Add an in-repository deterministic comparison generator with explicit JSON paths and no silent defaults.
+10. Rerun the isolated single-root 8192 experiment twice after repair.
+11. Keep `max_basic_blocks` at 512.
+12. Do not change `DEFAULT_BUDGETS`.
+13. Do not add roots.
+14. Do not approve a `max_basic_blocks` increase until repaired outputs show the true pending work.
+
+**Only the Windows main machine should perform this repair.** Ubuntu remains an independent Ghidra verification host.
+
+### 31.6a Accounting repair — ACCEPTED
+
+Accounting repair commit: `59696c1cac8c597427374af176fef9e2ab6859bd` — `fix: reconcile bounded HFD CFG queue accounting` (uncommitted working-tree change; do not commit, tag, or push without explicit approval).
+
+Accounting repair:
+- Final acceptance: PASS
+- Full unittest suite: 262 passing
+- CFG partition tests: 99 passing
+- Python compilation: PASS
+- Baseline artifacts unchanged
+- Target SHA-256 unchanged (`A76806ADA9648D2672BBEBEAD8A9BB396C0BC6F3A0A071E22E99001AC3359D03`)
+- Decoder SHA-256 unchanged (`B6A4B5CBF5E7470AC82A96D19161EC803F3400DC4F65F09B3AECDE74B2A3326A`)
+- No prohibited-range access
+- No canonical overlaps
+- No duplicate canonical ownership or edges
+
+8192 experiment:
+- Root: `0x60017490`
+- `max_instructions`: 8192
+- `max_basic_blocks`: 512
+- Binding budget: `max_basic_blocks`
+- Acceptance: `PASS_BUDGET_TRUNCATED`
+- Canonical blocks: 666
+- Canonical instructions: 5238
+- Accepted functions: 22
+- Candidates: 77
+- Queue discoveries: 223
+- Processed/resolved: 153
+- Pending blocks: 12
+- Pending functions: 58
+- Pending total: 70
+- Reconciliation: 153 + 70 = 223
+- Self-loop count: 1
+- Prohibited-range access: 0
+
+Reproducibility:
+- Two independent fresh-directory runs
+- Six matching artifact hashes
+- Comparison JSON SHA256: `92D61DD6CF5E9E965965218B9A7BDB9CCA107DDF1D3C20DAE2849FA7AA318310`
+
+### 31.7 Current decision gates
+
+| Gate | Status | Condition |
+|------|--------|-----------|
+| Accounting repair | ACCEPTED | Final acceptance PASS; 262 unittest tests passing; 99 CFG partition tests passing; py_compile PASS |
+| 8192 bounded experiment | ACCEPTED | Binding budget `max_basic_blocks=512`; `PASS_BUDGET_TRUNCATED`; reconciliation 153 + 70 = 223 |
+| Commit experimental profile | HOLD | Until repaired accounting and rerun validation |
+| Increase `max_basic_blocks` | HOLD | Until repaired outputs show true pending work |
+| Change `DEFAULT_BUDGETS` | HOLD | |
+| Add vector roots | HOLD | |
+| Multi-root expansion | HOLD | |
+| Type 3 investigation | HOLD | |
+| Ubuntu/Ghidra rerun | Not required | Checkpoint retained |
+
+### 31.8 Evidence classifications to preserve
+
+**VERIFIED**:
+- Target identity (size 313652, SHA-256 `A76806ADA9648D2672BBEBEAD8A9BB396C0BC6F3A0A071E22E99001AC3359D03`)
+- Decoder identity (`mcdis.py` SHA-256 `B6A4B5CBF5E7470AC82A96D19161EC803F3400DC4F65F09B3AECDE74B2A3326A`)
+- Root `0x60017490`
+- Startup literals (`0x600174C0=0x00874FFC`, `0x600174C4=0x60010000`, `0x600174C8=0x60045150`, `0x600174CC=0x600449B0`)
+- Calls to `0x60045150` and `0x600449B0`
+- Self-loop `0x600174BC` → `0x600174BC`
+- Canonical bounded graph relationships
+- Zero prohibited-range access
+- Deterministic graph topology
+
+**STRONG STRUCTURAL INFERENCE**:
+- Startup initialization role
+- `0x00874FFC` as initial stack value
+- `0x60010000` as image base and VBR
+- Accepted-function entry plausibility
+- Little-endian M*Core as working architecture
+
+**STRUCTURAL CANDIDATE**:
+- The 56 queued candidates in the 8192 run
+- The 11 newly observed queued candidates
+- Outside-observed-map valid targets
+- Unresolved indirect-flow sites
+- Function-purpose hypotheses
+
+**UNKNOWN**:
+- Type 3 dispatcher
+- Type 3 runtime mapping
+- Icon-selection formula
+- Transmitter
+- ABI correctness of the patched Ghidra compiler spec
+- Complete-firmware reachability
+- Full vector-root coverage
+- True pending-work totals for the current invalid 8192 artifacts
+
+### 31.9 Operational reminders
+
+- 80K-token hard ceiling for context.
+- Small bounded-agent-task workflow.
+- Documentation, version, commit, stage, tag, and push require explicit user approval.
+- The committed 4096 bounded graph (`3ec58fd` implementation, `0387967` documentation) remains the **accepted baseline**.
+- The 8192 experiment is recorded as:
+  - Structurally informative
+  - Deterministic in graph topology
+  - Accounting-invalid
+  - NOT accepted as a new default candidate
+
 ## External Research Reconciliation and New-Chat Handover
 
 ### 1. Current repository state and latest relevant commit
@@ -786,8 +1043,8 @@ Do not implement Companion or OpenDeck integration in this task.
 - Repository: C:\temp\aula-l99-controller
 - Branch: main
 - Remote: miniz3210/aula-l99-controller.git
-- Latest commit: 6ed268d "Add firmware-free AULA input bridge prototype"
-- Working tree: clean
+- Latest commit: `0387967` — `docs: record bounded canonical MCore CFG checkpoint`
+- Working tree: modified (`scripts/research/hfd_cfg.py`, `tests/test_hfd_cfg_partition.py`); nothing staged, no commits created.
 - Vendor binaries and extracted artifacts are local only and ignored by Git.
 
 ### 2. What has been completed
@@ -806,10 +1063,13 @@ Do not implement Companion or OpenDeck integration in this task.
 - Levetop LT168/SDK/UI_Editor-II materials reviewed.
 - gavindi/Aula_L99_Linux reviewed.
 - kei825/aula-l99-screen-fw reviewed.
+- Bounded canonical M*Core CFG tooling added (`scripts/research/hfd_cfg.py`, `tests/test_hfd_cfg_partition.py`).
+- Queue-accounting fix and comparison generation added to the CFG tooling (uncommitted).
 
 ### 3. What remains uncommitted, if anything
 
-- Working tree is clean; all completed work is committed.
+- `scripts/research/hfd_cfg.py` and `tests/test_hfd_cfg_partition.py` are modified in the working tree.
+- No commits, tags, or pushes have been created for this work.
 
 ### 4. Exact evidence categories
 
@@ -1054,6 +1314,136 @@ Multi-root expansion remains HOLD.
 
 Documentation, commit, version, tag, and push require explicit user approval.
 
+### 11. Queue-accounting correction and comparison generation (uncommitted)
+
+#### 11.1 Root cause
+
+- `build_canonical_summary` emitted hardcoded empty queue literals instead of real queue accounting.
+- `build_canonical_summary` and `validate_graph_consistency` skipped reconciliation when status counts were empty.
+- Block-loop exhaustion hardcoded `budget_max_instructions` instead of reporting the actual exhausted budget.
+- Queue-accounting logic was duplicated across multiple output paths.
+
+#### 11.2 Implementation changes
+
+1. Added the pure shared helper `build_queue_accounting()`. It returns:
+
+   - `queue_discovery_records`
+   - `queue_discovery_record_count`
+   - `queue_final_status_counts`
+   - `pending_block_work`
+   - `pending_block_work_count`
+   - `pending_function_work`
+   - `pending_function_work_count`
+   - `pending_total_work`
+   - `pending_total_work_count`
+   - `processed_or_resolved_queue_records`
+   - `repeated_queue_discovery_count`
+   - `queue_reconciliation_status`
+
+   It is used by `_build_output` and `build_canonical_summary`, through
+   `_build_queue_summary_from_builder`, and is available to cfg report, reproducibility, and
+   preview paths.
+
+2. Added fail-loud queue reconciliation through `reconcile_queue_accounting()`.
+
+   - It enforces all queue-accounting equations.
+   - It runs before atomic output replacement.
+   - `validate_graph_consistency` no longer skips validation when status counts are empty.
+
+3. Corrected block-loop exhaustion reporting.
+
+   - Exhaustion now uses `reason = f"budget_{be}"`.
+   - Example: `budget_max_basic_blocks`.
+   - It no longer hardcodes `budget_max_instructions`.
+   - Generic `budget_*` reasons and `pending_unprocessed_budget_exhaustion` are classified as
+     `pending_budget_exhaustion`.
+
+4. Added a deterministic queue-record schema.
+
+   Each record contains:
+
+   - `target_address`
+   - `call_site_address`
+   - `depth`
+   - `work_type`
+   - `reason`
+   - `function_id`
+   - `final_status`
+
+   Absent values are represented as `null`. Records are deterministically sorted and do not
+   use Python tuple formatting.
+
+5. Added candidate-versus-queue metrics:
+
+   - `queued_candidates_scheduled_pending`
+   - `queued_candidates_not_scheduled_depth_limit`
+   - `queued_candidates_without_function_work_record`
+
+6. Added comparison generation:
+
+   - `generate_comparison_4096_vs_8192()`
+   - `--compare-baseline-json`
+   - `--compare-experiment-json`
+   - `--compare-output`
+
+   Comparison output includes explicit provenance paths and fails loudly when required fields
+   are missing. Optional unavailable metrics use `null` together with `value_present: false`
+   and a `reason`.
+
+#### 11.3 Validation results
+
+- Tests: **99 passed**, consisting of 73 existing tests and 26 new tests.
+- Test framework: `unittest`.
+- No firmware execution was performed.
+- `py_compile`: passed for both modified Python files.
+- All six baseline hashes remained unchanged before and after the implementation.
+- Experiment runs 1 and 2 were deterministic across fresh directories.
+
+Queue-accounting results:
+
+- `queue_discovery_record_count = 223`
+- Final status counts sum to 223.
+- Pending block work: 12
+- Pending function work: 58
+- Pending total work: 70
+- Processed or resolved records: 153
+- Reconciliation: `153 + 70 = 223`
+
+Binding-budget result:
+
+- Binding budget: `max_basic_blocks`
+- Limit: 512
+- Status: `PASS_BUDGET_TRUNCATED`
+- Pending block reason: `budget_max_basic_blocks`
+- Pending records no longer incorrectly report `max_instructions`
+
+Canonical result:
+
+- Blocks: 666
+- Instructions: 5238
+- Functions: 22
+- Candidates: 77
+- Prohibited counters: 0
+- Self-loop count: exactly 1
+- Target hash remained unchanged, beginning with `A76806AD...`
+
+Comparison JSON SHA-256:
+
+`92D61DD6CF5E9E965965218B9A7BDB9CCA107DDF1D3C20DAE2849FA7AA318310`
+
+#### 11.4 Scope constraints confirmed
+
+- No `DEFAULT_BUDGETS` change.
+- No root added.
+- No documentation was changed during the implementation phase.
+- No commit, tag, push, or version change.
+- Experimental output is now valid.
+
+#### 11.5 Remaining recommendation
+
+Add comparison generation to the experiment CI flow so that provenance is regenerated and
+validated for every baseline/experiment pair.
+
 ### 10. What must not be changed
 
 Do not change Python code, tests, firmware, generated CFG outputs, version files, or analysis budgets.
@@ -1072,6 +1462,11 @@ Do not:
 - run an 8192 experiment;
 - add vector roots;
 - commit, tag, or push.
+
+The following documentation updates are in progress and must be preserved:
+- `docs/PROJECT_HANDOVER.md` — queue-accounting correction and comparison generation record.
+- `README.md` — queue-accounting output schema and comparison CLI.
+- `CHANGELOG.md` — corrected, added, and verified entries for the queue-accounting fix.
 
 
 ### 10. Conflicts and corrected assumptions

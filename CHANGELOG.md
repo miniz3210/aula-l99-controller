@@ -3,41 +3,95 @@
 ## Unreleased
 
 ### Added
-- Added bounded recursive M*Core CFG tooling (`scripts/research/hfd_cfg.py`) for read-only,
-  bounded control-flow discovery of HFD Code V2.3 (`313652 bytes`, SHA-256
-  `A76806ADA9648D2672BBEBEAD8A9BB396C0BC6F3A0A071E22E99001AC3359D03`).
-- Added canonical block, range, edge, byte-accounting, reproducibility, and
-  evidence-classification outputs under `local_analysis/cfg/` (ignored local artifacts).
-- Added 51 standard-library unit tests in `tests/test_hfd_cfg_partition.py`.
-- Verified startup literals (`0x600174C0 = 0x00874FFC`, `0x600174C4 = 0x60010000`,
-  `0x600174C8 = 0x60045150`, `0x600174CC = 0x600449B0`), two direct-call targets
-  (`0x600174B8 -> 0x60045150`, `0x600174BA -> 0x600449B0`), and the self-loop
-  (`0x600174BC -> 0x600174BC`) with independent Ghidra M*Core analysis
-  (`analyzeHeadless`, ghidra-mcore commit `2f32468f`, language `MCORE:LE:32:default`,
-  Ubuntu x86_64 host).
-- The graph is accepted but budget-truncated (`PASS_BUDGET_TRUNCATED`, max_instructions
-  exhaustion at 4096 instructions); this is bounded control-flow discovery only, not
-  complete-firmware coverage.
+- Added the constrained experimental single-root 8192 safety profile (`--experimental-single-root-8192`, profile name `experimental_single_root_8192`). Requires exactly one root `0x60017490`, `max_instructions=8192`, all other budgets at `DEFAULT_BUDGETS` defaults (including `max_basic_blocks=512`). Output isolated under `local_analysis/cfg_experiments/`. `DEFAULT_BUDGETS` unchanged.
+- Ran an isolated 8192 experiment that reached `max_basic_blocks` first (binding budget). The experiment expanded canonical coverage: blocks 475→666, instructions 3371→5238, edges 605→869, unique reachable bytes 6742→10476, candidates 66→77, 11 new queued candidates (`0x600221C0`, `0x600225EC`, `0x600235EC`, `0x60027C7C`, `0x6002F6B0`, `0x6002FCA0`, `0x60032B28`, `0x60032DD0`, `0x60034B60`, `0x60034D54`, `0x6004C412`). Accepted functions unchanged at 22. Two runs produced deterministic graph-output hashes.
+- Independent Ubuntu/Ghidra startup verification completed: verified startup literals, two direct-call targets (`0x600174B8→0x60045150`, `0x600174BA→0x600449B0`), self-loop `0x600174BC→0x600174BC`. Ghidra 12.1.4 with ghidra-mcore (commit `2f32468f`, `MCORE:LE:32:default`). Local `mcore_le.cspec` compatibility patch applied (not vendor-confirmed; ABI correctness UNKNOWN).
+- Working-tree changes in `scripts/research/hfd_cfg.py` and `tests/test_hfd_cfg_partition.py` implement queue-accounting fixes (shared helper `build_queue_accounting`, reconciliation enforcement, budget-exhaustion reporting, deterministic queue-record schema, candidate-versus-queue metrics, comparison CLI). These fixes are present in the working tree but the 8192 experiment was executed before they were applied; its generated outputs contain the pre-fix invalid accounting.
+
+### Corrected
+- Identified invalid canonical queue/pending reporting in the 8192 experiment outputs caused by hardcoded zero fields in `build_canonical_summary` (`queue_final_status_counts={}`, `pending_block_work=[]`, `pending_block_count=0`, `pending_function_work=[]`, `pending_function_count=0`, `pending_total_work=[]`, `pending_total_count=0`, `processed_or_resolved_queue_records=0`) and non-persisted queue records. Reconciliation skipped validation when status counts were empty. Block-loop exhaustion incorrectly recorded `budget_max_instructions` even when `max_basic_blocks` was the actual exhausted budget.
+- Clarify that the committed 4096 checkpoint (`3ec58fd` implementation, `0387967` documentation) remains authoritative. No defaults or roots changed. The 8192 experiment is structurally informative and deterministic in graph topology but accounting-invalid; not accepted as a new default candidate.
+
+### Accounting repair — ACCEPTED (uncommitted)
+
+Accounting repair commit: `59696c1cac8c597427374af176fef9e2ab6859bd` — `fix: reconcile bounded HFD CFG queue accounting`.
+
+Accounting repair:
+- Final acceptance: PASS
+- Full unittest suite: 262 passing
+- CFG partition tests: 99 passing
+- Python compilation: PASS
+- Baseline artifacts unchanged
+- Target SHA-256 unchanged (`A76806ADA9648D2672BBEBEAD8A9BB396C0BC6F3A0A071E22E99001AC3359D03`)
+- Decoder SHA-256 unchanged (`B6A4B5CBF5E7470AC82A96D19161EC803F3400DC4F65F09B3AECDE74B2A3326A`)
+- No prohibited-range access
+- No canonical overlaps
+- No duplicate canonical ownership or edges
+
+8192 bounded experiment:
+- Root: `0x60017490`
+- `max_instructions`: 8192
+- `max_basic_blocks`: 512
+- Binding budget: `max_basic_blocks`
+- Acceptance: `PASS_BUDGET_TRUNCATED`
+- Canonical blocks: 666
+- Canonical instructions: 5238
+- Accepted functions: 22
+- Candidates: 77
+- Queue discoveries: 223
+- Processed/resolved: 153
+- Pending blocks: 12
+- Pending functions: 58
+- Pending total: 70
+- Reconciliation: 153 + 70 = 223
+- Self-loop count: 1
+- Prohibited-range access: 0
+
+Reproducibility:
+- Two independent fresh-directory runs
+- Six matching artifact hashes
+- Comparison JSON SHA256: `92D61DD6CF5E9E965965218B9A7BDB9CCA107DDF1D3C20DAE2849FA7AA318310`
+
+Decision gates:
+- Accounting repair: ACCEPTED
+- 8192 bounded experiment: ACCEPTED
+- Increase `max_basic_blocks`: HOLD
+- Change `DEFAULT_BUDGETS`: HOLD
+- Add vector roots: HOLD
+- Multi-root expansion: HOLD
+- Type 3 investigation: HOLD
+
+Next research task:
+- Read-only CFG frontier analysis of 70 pending queue records.
+
+### Next
+- Decision gates remain as recorded above: Increase `max_basic_blocks` HOLD, change `DEFAULT_BUDGETS` HOLD, add vector roots HOLD, multi-root expansion HOLD, commit experimental profile HOLD.
+
+## v0.6.3 - 2026-11-10
 
 ### Added
-- Verified HFD Code V2.3 identity: 313652 bytes, SHA-256 A76806ADA9648D2672BBEBEAD8A9BB396C0BC6F3A0A071E22E99001AC3359D03.
-- Established little-endian M*Core as the strongly supported working architecture for HFD Code V2.3, based on third-party mcore-elf build configuration, M*Core decoder/emulator implementations, little-endian vector/pointer structure, flash/image addresses in 0x60000000 space, SRAM addresses in 0x00800000–0x008BFFFF, minimum 2-byte instruction alignment, and bounded native decoding with structurally credible branches, calls, returns, stack saves/restores, SRAM/image/MMIO constants, and in-image targets. Explicitly noted: this is not Levetop vendor-confirmed.
-- Completed bounded M*Core decoder validation against third-party mcdis.py, mcemu.py, and mcemu.c across four bounded regions (128 bytes from 0x60017490, 64 bytes from 0x6001F958, 64 bytes from 0x6001FA10, 64 bytes from 0x6001F980): 160 total 16-bit words, 152 known mnemonics, 8 .short fallbacks, 95% linear mnemonic coverage, 16 direct branch/call targets, 16/16 targets 2-byte aligned, 16/16 targets within image. Semantics agreement for load/store immediate scaling, BR displacement, loopt, LR/LJ literal addressing, jmp, jsr, rts represented as jmp r15.
-- Current GO status: "GO for bounded M*Core control-flow discovery." NOT GO for claiming that the Type 3 dispatcher, Type 3 runtime mapping, or icon-selection formula has been established.
-- Type 3 evidence audit: Type 3 serialized UI records are 14 bytes; parsed fields include variable, x, y, first_icon, last_icon, min_value, max_value; manifest contains multi-state Type 3 records, disproving earlier claim that all Type 3 records are two-state.
-- Candidate image base 0x60010000 supported by 21 in-range candidate entries and existing documentation, but not independently proven by vendor loader metadata.
-- Linear-decoding caveat documented: 95% is linear mnemonic coverage, not proof that 95% of bytes are reachable executable code; entry at 0x60017490 includes stack/VBR setup and self-branch at 0x600174BC; bytes following may include literal pools, embedded data, unreachable padding, or independent functions; next phase must use recursive control-flow traversal from defensible entry points.
-- Claims retracted or left unverified: Type 3 dispatcher at 0x60031198–0x600315D0 (NOT ESTABLISHED); 0x60049D98 transmitter role (existing document-supported claim, not independently verified); REA invocation on HFD Code V2.3; 135969 instructions identified; 32-byte RAM record layout; serialized Type 3 records copied into 32-byte runtime structure; Type 3 variable N maps to RAM word 0x0600 + N; icon-selection formula established; all Type 3 records two-state (CONTRADICTED by manifest); ARM/Thumb or SuperH decoding provides evidence.
-- Decoder limitations preserved: mcdis.py is a hand-transcribed third-party decoder reportedly derived from binutils M*Core tables; original binutils mcore-opc.h and mcore-dis.c not present locally; no independent known-good M*Core opcode vectors; agreement among mcdis.py, mcemu.py, mcemu.c is not independent validation (same third-party repo); duplicate-code/opcode-table first-match ordering unverified; broader validation may require original binutils M*Core opcode tables, mcore-elf-objdump, or known-good assembler/disassembler vectors.
-- No firmware executed or emulated; no hardware accessed; no tracked file modified during read-only analysis.
-- No firmware, vendor packages, captures, temporary analysis files, generated disassembly, or local-only artifacts added to Git.
+- Recorded Chinese AULA L99 version 1.0.1.4 as the analysis baseline: only available version known to expose both keyboard firmware upgrade and screen firmware upgrade as separate upgrade paths targeting different controllers; keyboard updater version and screen updater version are not one version sequence.
+- Recorded installed baseline: C:\Program Files (x86)\AULA L99; baseline inventory C:\temp\L99_1.0.1.4_baseline.txt; 212 files inventoried.
+- Recorded DeviceDriver.exe (1,837,056 bytes, SHA-256 DD9C934E2F6F1CC53AE4AFB5B412C3F696CD4D329A03DF28BD151DAB90B3E6B3); Process Monitor confirmed Explorer launched DeviceDriver.exe and DeviceDriver.exe launched both firmware tools.
+- Recorded verified keyboard/screen firmware upgrade mapping (Process Create and Process Start captures, not filename-based assumption): DeviceDriver.exe -> firmware\L99_中文_V1.31.exe (2,213,280 bytes, SHA-256 E316C25591711D1B425E0BB4F17C02813E70AB9D8CD982D91EA331222112276D; keyboard controller USB HID 0C45:800A) and DeviceDriver.exe -> firmware\L99_ISP_中文完整UI_V1.23_156.exe (162,852,672 bytes, SHA-256 0A77055429DA60E35AFE419A367BE1AB987B7E3F4CA3B67477BD017AA097FC55; screen interface EEEF:268A virtual COM; screen controller family under investigation LT268A/LT2686 UartTFT).
+- Recorded screen updater launch-only findings: launched without pressing Start; no firmware upgrade or intentional flash write; nineteen preserved evb*.tmp files, each exactly 1536 bytes, each beginning with an MZ header; strings included "This program must be run under Win32", "ntdll.dll", "ZwOpenFile"; all nineteen files had different SHA-256 hashes; small PE/helper stubs, not complete screen firmware payloads; pattern consistent with an Enigma Virtual Box style virtualized runtime but packer identity not conclusively verified; one zero-byte evb*.tmp remained locked by the running updater and was not forcibly copied; no large firmware image observed extracted into a normal TEMP file.
+- Recorded extraction inventory: HFD_ISP_TOOL_V1.31.exe (99,328 bytes, SHA-256 3FD0227368539E4B80A385EA721A1F091D6F22997DA24451E2F8248D512CA282; matching copies under evbunpack_output and firmware\unpacked); HFD_Code_V2.2.bin (305,800 bytes, SHA-256 432E358CAC96FB930AB680ADA6F953C9005027C58B31B7EE3BB6BC7868EF35CF; matching copies under evbunpack_output, firmware\unpacked, and the local softce working tree); Chinese 1.0.1.4 HFD_Code_V2.3.bin variant (313,504 bytes, SHA-256 B277823234FCAB7137963896493BCB6896FD985FC972354166FCFC584534E37F); other local HFD_Code_V2.3.bin variant (313,652 bytes, SHA-256 A76806ADA9648D2672BBEBEAD8A9BB396C0BC6F3A0A071E22E99001AC3359D03); Flash.ini (1,571 bytes, SHA-256 E515905C61A6AD99BF96EAAC3E24E5CFD21E274C087F9903B14F35ECECE21E2C).
+- Recorded Flash.ini purpose: flash-chip geometry database listing JEDEC IDs, page sizes, page/block counts, and chip models for supported SPI NOR and SPI NAND devices (Winbond, GigaDevice, XTX, Macronix, and related); contains no firmware filenames, no HFD_Code_V2.2.bin/V2.3.bin selection logic, no UartTFT-II_Flash.bin selection logic, no L99 model mapping, no firmware destination addresses, no firmware version-selection rules; not a payload-selection configuration.
+- Recorded verified comparison of the two HFD_Code_V2.3.bin variants: size difference 148 bytes; common prefix 0 bytes; first difference at offset 0x0; differing offsets in overlapping range 286084; common suffix 22 bytes — genuinely different builds or variants, not one file with a simple 148-byte trailer.
+- Corrected and recorded official UartTFT-II_Flash.bin provenance: downloaded directly from the official AULA website during the initial research (127,599,044 bytes, SHA-256 4CB3FA5C77EEA973A2B62CA61873F071692694F4C9A1832507FE2C8C9BA582B4); current local working path tools\softce-aula-l99-research\extracted\UartTFT-II_Flash.bin is only a working location used for analysis and must not be interpreted as file provenance; not extracted from the softce repository, not distributed by the softce repository, not extracted from the Chinese 1.0.1.4 updater, not produced by evbunpack, not recovered from a process memory dump; website URL and exact download timestamp are not claimed as known.
+- Recorded softce research context: softce documentation reports modifying resources, page descriptions, and touch records in a file named UartTFT-II_Flash.bin; softce repository does not distribute complete factory or modified BIN files; local official UartTFT-II_Flash.bin was copied into the softce working directory for analysis; local directory path must not be used to infer provenance.
+- Recorded official full-flash sample comparison: read-only raw containment test between L99_ISP_中文完整UI_V1.23_156.exe and official UartTFT-II_Flash.bin returned FULL_RAW_MATCH: NO; the official UartTFT-II_Flash.bin is not stored verbatim as one contiguous uncompressed block inside the Chinese 1.0.1.4 screen updater; this does not invalidate official provenance; possible explanations (compressed or encrypted storage, Enigma virtual-file packaging, segmented storage, runtime reconstruction, different official builds or delivery packages) remain unproven.
+- Added completed-work, do-not-repeat, unresolved-questions, safety-status, next-planned-task, and scanner-requirements sections to docs/PROJECT_HANDOVER.md, including a pasteable new-chat starting prompt.
 
-### Added
-- Official Levetop LT168/SDK/UI_Editor-II materials reviewed; official icon/GIF/kbkey/page/runtime-variable concepts identified; official example supports 90 pages; official LT168 memory map, startup/vector model, W25N01GV driver and compiled reference artifacts identified; widget WriteAddr operations and system page switching through 0x7000 documented.
-- Public teardown evidence separated from user-unit evidence (HFD168BDP/HFD80CP100/Winbond/GT911 from public sample only; user's unit not physically opened).
-- gavindi/Aula_L99_Linux reviewed as a source for existing HID, telemetry, image/GIF upload and serial work; historical LT7689 wording not adopted as confirmed chip identity.
-- kei825/aula-l99-screen-fw reviewed as third-party M*Core/LT168 emulator, GT911/NAND/SCI model and custom-deck research; third-party findings not yet independently verified on the user's unit.
-- Next task is HFD Code V2.3 read-only architecture fingerprint; hardware write status remains NO-GO.
+### Corrected
+- UartTFT-II_Flash.bin provenance corrected: official AULA website download; the local softce working-directory path under tools\softce-aula-l99-research\extracted\ must not be interpreted as file provenance, and no claim is made that the file came from softce, evbunpack, the Chinese 1.0.1.4 updater, or a process memory dump.
+
+### Safety
+- Firmware work remains read-only. Do not press Start in either updater. Do not flash either HFD_Code_V2.3.bin variant. Do not write the official UartTFT-II_Flash.bin. Do not enter bootloader mode solely for experimentation. Do not replay upgrade traffic. Do not modify updater executables. Do not treat the existence of an official image as proof that recovery is safe. Brick risk remains material until flash layout, validation logic, write sequence, and recovery method are verified.
+
+### Verified
+- git diff -- CHANGELOG.md docs/PROJECT_HANDOVER.md reviewed.
+- All required hashes, verified mappings, corrections, and safety status present in updated documentation; all newly added content is English only.
 
 ## v0.6.2 - 2026-11-10
 
@@ -46,7 +100,7 @@
 - Main application: `DeviceDriver.exe` (1,837,056 bytes, SHA-256 `DD9C934E2F6F1CC53AE4AFB5B412C3F696CD4D329A03DF28BD151DAB90B3E6B3`), PID 5652 parent for both upgrade entries.
 - Keyboard firmware upgrade: `firmware\L99_中文_V1.31.exe` (2,213,280 bytes, SHA-256 `E316C25591711D1B425E0BB4F17C02813E70AB9D8CD982D91EA331222112276D`), child PID 27840.
 - Screen firmware upgrade: `firmware\L99_ISP_中文完整UI_V1.23_156.exe` (162,852,672 bytes, SHA-256 `0A77055429DA60E35AFE419A367BE1AB987B7E3F4CA3B67477BD017AA097FC55`), child PID 16676.
-- Verified process hierarchy: `DeviceDriver.exe` → keyboard `L99_中文_V1.31.exe` / screen `L99_ISP_中文完整UI_V1.23_156.exe`.
+- Verified process hierarchy: `DeviceDriver.exe` -> keyboard `L99_中文_V1.31.exe` / screen `L99_ISP_中文完整UI_V1.23_156.exe`.
 
 ### Safety
 - No firmware upgrade started.
@@ -132,7 +186,7 @@
 - Exact UI-only package layout documented as STRONG_INFERENCE (required: `HFD_ISP_TOOL_V1.31.exe` + `UartTFT-II_Flash.bin`; optional: `Flash.ini`; excluded: HFD_Code files).
 - HFD optional/required conclusion: HFD_Code files can be omitted; absence of HFD files selects UI-only mode per softce (STRONG_INFERENCE); not VERIFIED by static analysis.
 - Updater rewrites HFD before/after UI: UNKNOWN.
-- Interrupted-write recovery: automatic software recovery UNKNOWN; manual re-entry into ISP STRONG_INFERENCE (official instructions: power cycle, Fn+X→0→6, Fn+Space; one configuration only, not universal).
+- Interrupted-write recovery: automatic software recovery UNKNOWN; manual re-entry into ISP STRONG_INFERENCE (official instructions: power cycle, Fn+X->0->6, Fn+Space; one configuration only, not universal).
 - Vendor firmware provenance documented (listing URL, direct ZIP URL, filename, size, SHA-256, URL directory date != release date, hash-locked extractor reproduction, private backup recommendation, no redistribution).
 
 ### Remaining blockers (critical)
@@ -144,20 +198,9 @@
 ## Unreleased
 
 ### Added
-- Optimised `scripts/flash_checksum_scanner.py` with `--mode quick` (targeted structural checks,
-  no exploratory whole-image candidate scanning, target under 30 seconds on the 127,599,044-byte
-  factory image) and `--mode deep` (full structural investigation, cached by factory hash, patched
-  hash, scanner version, scanner source hash, algorithm list, and region-map hash). Cache hit returns
-  immediately. Uses native C-backed CRC32 (zlib), lookup-table CRC16/MODBUS and CRC32/standard,
-  ProcessPoolExecutor parallelisation across `min(8, physical CPU cores)` workers (never
-  ThreadPoolExecutor for CPU-bound work), single full-image read, per-region single algorithm
-  computation, configurable `--max-runtime` guard, and phase/progress/timing output.
-- Added synthetic tests for quick/deep modes, cache creation, cache-hit on identical key, cache
-  invalidation on changed scanner version/source hash/algorithm list/region map, deterministic cached
-  output, false-positive CRC16 collision handling, timeout guard, source-image immutability, and
-  multiprocessing/single-worker equivalence.
-- Deleted `scripts/analyze_updater_pe.py` (was a one-off PE analysis tool, not a reusable checksum
-  scanner; no longer needed now that PE analysis results are documented).
+- Optimised `scripts/flash_checksum_scanner.py` with `--mode quick` (targeted structural checks, no exploratory whole-image candidate scanning, target under 30 seconds on the 127,599,044-byte factory image) and `--mode deep` (full structural investigation, cached by factory hash, patched hash, scanner version, scanner source hash, algorithm list, and region-map hash). Cache hit returns immediately. Uses native C-backed CRC32 (zlib), lookup-table CRC16/MODBUS and CRC32/standard, ProcessPoolExecutor parallelisation across `min(8, physical CPU cores)` workers (never ThreadPoolExecutor for CPU-bound work), single full-image read, per-region single algorithm computation, configurable `--max-runtime` guard, and phase/progress/timing output.
+- Added synthetic tests for quick/deep modes, cache creation, cache-hit on identical key, cache invalidation on changed scanner version/source hash/algorithm list/region map, deterministic cached output, false-positive CRC16 collision handling, timeout guard, source-image immutability, and multiprocessing/single-worker equivalence.
+- Deleted `scripts/analyze_updater_pe.py` (was a one-off PE analysis tool, not a reusable checksum scanner; no longer needed now that PE analysis results are documented).
 - Added `docs/UI_ONLY_PACKAGE_CONSTRUCTION.md` — offline static-analysis record of UI-only vs combined package construction. UI-only packages confirmed to exist per softce (STRONG_INFERENCE); exact accepted construction NOT verified. HFD_Code_V2.3 same-name hash discrepancy documented (`evbunpack_output` = earlier build `b2778232...`, 313,504 bytes; `softce/extracted` = official `a76806ad...`, 313,652 bytes).
 - Added `docs/PAGE21_FIRST_PATCH_PLAN.md` — Page 21 return code 0x003B, descriptor 341/342 patch plan. Equal-size (8,978-byte) in-place replacement is structurally sufficient: no descriptor-table, page-table, touch-record, global-metadata, or per-resource-checksum changes required. Image-level checksum blocker remains open.
 
@@ -204,7 +247,7 @@
 - C11 Image-level CRC: VERIFIED (CRC32 reflected IEEE per-packet; FileCRC/FlashCRC strings).
 - C12 Per-packet/final verification: STRONG_INFERENCE (per-packet CRC32; final OK/fail status).
 - C13 Full-image vs ranges: VERIFIED (full 127,599,044-byte image transferred).
-- C14 Flash JEDEC/model checks: STRONG_INFERENCE (Flash.ini JEDEC→chip mapping; `0xEFAA21` string).
+- C14 Flash JEDEC/model checks: STRONG_INFERENCE (Flash.ini JEDEC->chip mapping; `0xEFAA21` string).
 - C15 Hardware/board ID checks: STRONG_INFERENCE ("Fail to Connect a 268x device"; Qt5SerialPort VID/PID imports; `268A` string).
 - C16 Version compatibility: STRONG_INFERENCE (flash-ID-based HFD selection; V1.31 unresolved).
 - C17 Read-back/post-write: STRONG_INFERENCE (status strings exist; arbitrary read-back not established).
@@ -266,29 +309,3 @@
 - Built-in page/resource table locations within HFD_Code binaries not yet located.
 - Recovery and bootloader procedure not yet established.
 - Exact cause of external author's bricked keyboard remains unproven.
-
-## v0.6.3 - 2026-11-10
-
-### Added
-- Recorded Chinese AULA L99 version 1.0.1.4 as the analysis baseline: only available version known to expose both keyboard firmware upgrade and screen firmware upgrade as separate upgrade paths targeting different controllers; keyboard updater version and screen updater version are not one version sequence.
-- Recorded installed baseline: C:\Program Files (x86)\AULA L99; baseline inventory C:\temp\L99_1.0.1.4_baseline.txt; 212 files inventoried.
-- Recorded DeviceDriver.exe (1,837,056 bytes, SHA-256 DD9C934E2F6F1CC53AE4AFB5B412C3F696CD4D329A03DF28BD151DAB90B3E6B3); Process Monitor confirmed Explorer launched DeviceDriver.exe and DeviceDriver.exe launched both firmware tools.
-- Recorded verified keyboard/screen firmware upgrade mapping (Process Create and Process Start captures, not filename-based assumption): DeviceDriver.exe -> firmware\L99_中文_V1.31.exe (2,213,280 bytes, SHA-256 E316C25591711D1B425E0BB4F17C02813E70AB9D8CD982D91EA331222112276D; keyboard controller USB HID 0C45:800A) and DeviceDriver.exe -> firmware\L99_ISP_中文完整UI_V1.23_156.exe (162,852,672 bytes, SHA-256 0A77055429DA60E35AFE419A367BE1AB987B7E3F4CA3B67477BD017AA097FC55; screen interface EEEF:268A virtual COM; screen controller family under investigation LT268A/LT2686 UartTFT).
-- Recorded screen updater launch-only findings: launched without pressing Start; no firmware upgrade or intentional flash write; nineteen preserved evb*.tmp files, each exactly 1536 bytes, each beginning with an MZ header; strings included "This program must be run under Win32", "ntdll.dll", "ZwOpenFile"; all nineteen files had different SHA-256 hashes; small PE/helper stubs, not complete screen firmware payloads; pattern consistent with an Enigma Virtual Box style virtualized runtime but packer identity not conclusively verified; one zero-byte evb*.tmp remained locked by the running updater and was not forcibly copied; no large firmware image observed extracted into a normal TEMP file.
-- Recorded extraction inventory: HFD_ISP_TOOL_V1.31.exe (99,328 bytes, SHA-256 3FD0227368539E4B80A385EA721A1F091D6F22997DA24451E2F8248D512CA282; matching copies under evbunpack_output and firmware\unpacked); HFD_Code_V2.2.bin (305,800 bytes, SHA-256 432E358CAC96FB930AB680ADA6F953C9005027C58B31B7EE3BB6BC7868EF35CF; matching copies under evbunpack_output, firmware\unpacked, and the local softce working tree); Chinese 1.0.1.4 HFD_Code_V2.3.bin variant (313,504 bytes, SHA-256 B277823234FCAB7137963896493BCB6896FD985FC972354166FCFC584534E37F); other local HFD_Code_V2.3.bin variant (313,652 bytes, SHA-256 A76806ADA9648D2672BBEBEAD8A9BB396C0BC6F3A0A071E22E99001AC3359D03); Flash.ini (1,571 bytes, SHA-256 E515905C61A6AD99BF96EAAC3E24E5CFD21E274C087F9903B14F35ECECE21E2C).
-- Recorded Flash.ini purpose: flash-chip geometry database listing JEDEC IDs, page sizes, page/block counts, and chip models for supported SPI NOR and SPI NAND devices (Winbond, GigaDevice, XTX, Macronix, and related); contains no firmware filenames, no HFD_Code_V2.2.bin/V2.3.bin selection logic, no UartTFT-II_Flash.bin selection logic, no L99 model mapping, no firmware destination addresses, no firmware version-selection rules; not a payload-selection configuration.
-- Recorded verified comparison of the two HFD_Code_V2.3.bin variants: size difference 148 bytes; common prefix 0 bytes; first difference at offset 0x0; differing offsets in overlapping range 286084; common suffix 22 bytes — genuinely different builds or variants, not one file with a simple 148-byte trailer.
-- Corrected and recorded official UartTFT-II_Flash.bin provenance: downloaded directly from the official AULA website during the initial research (127,599,044 bytes, SHA-256 4CB3FA5C77EEA973A2B62CA61873F071692694F4C9A1832507FE2C8C9BA582B4); current local working path tools\softce-aula-l99-research\extracted\UartTFT-II_Flash.bin is only a working location used for analysis and must not be interpreted as file provenance; not extracted from the softce repository, not distributed by the softce repository, not extracted from the Chinese 1.0.1.4 updater, not produced by evbunpack, not recovered from a process memory dump; website URL and exact download timestamp are not claimed as known.
-- Recorded softce research context: softce documentation reports modifying resources, page descriptions, and touch records in a file named UartTFT-II_Flash.bin; softce repository does not distribute complete factory or modified BIN files; local official UartTFT-II_Flash.bin was copied into the softce working directory for analysis; local directory path must not be used to infer provenance.
-- Recorded official full-flash sample comparison: read-only raw containment test between L99_ISP_中文完整UI_V1.23_156.exe and official UartTFT-II_Flash.bin returned FULL_RAW_MATCH: NO; the official UartTFT-II_Flash.bin is not stored verbatim as one contiguous uncompressed block inside the Chinese 1.0.1.4 screen updater; this does not invalidate official provenance; possible explanations (compressed or encrypted storage, Enigma virtual-file packaging, segmented storage, runtime reconstruction, different official builds or delivery packages) remain unproven.
-- Added completed-work, do-not-repeat, unresolved-questions, safety-status, next-planned-task, and scanner-requirements sections to docs/PROJECT_HANDOVER.md, including a pasteable new-chat starting prompt.
-
-### Corrected
-- UartTFT-II_Flash.bin provenance corrected: official AULA website download; the local softce working-directory path under tools\softce-aula-l99-research\extracted\ must not be interpreted as file provenance, and no claim is made that the file came from softce, evbunpack, the Chinese 1.0.1.4 updater, or a process memory dump.
-
-### Safety
-- Firmware work remains read-only. Do not press Start in either updater. Do not flash either HFD_Code_V2.3.bin variant. Do not write the official UartTFT-II_Flash.bin. Do not enter bootloader mode solely for experimentation. Do not replay upgrade traffic. Do not modify updater executables. Do not treat the existence of an official image as proof that recovery is safe. Brick risk remains material until flash layout, validation logic, write sequence, and recovery method are verified.
-
-### Verified
-- git diff -- CHANGELOG.md docs/PROJECT_HANDOVER.md reviewed.
-- All required hashes, verified mappings, corrections, and safety status present in updated documentation; all newly added content is English only.
