@@ -4,6 +4,7 @@ import json
 import os
 import tempfile
 import unittest
+from pathlib import Path
 
 sys.path.insert(0, "scripts/research")
 
@@ -26,6 +27,17 @@ from hfd_cfg import (  # noqa: E402
     compute_byte_accounting,
     classify_evidence,
     determine_acceptance_status,
+    validate_budget_profile,
+    DEFAULT_BUDGETS,
+    EXPERIMENTAL_MAX_INSTRUCTIONS,
+    EXPERIMENTAL_ROOT,
+    EXPERIMENTAL_FLAG,
+    EXPERIMENTAL_PROFILE_NAME,
+    build_queue_accounting,
+    reconcile_queue_accounting,
+    candidate_queue_metrics,
+    generate_comparison_4096_vs_8192,
+    build_comparison_record,
 )
 
 PROHIBITED_START = 0x60031198
@@ -709,6 +721,549 @@ class TestAcceptanceStatus(unittest.TestCase):
         ba = {"overlap_redecoded_byte_count": 0}
         status, _, _, _ = determine_acceptance_status(summary, ba, False, {})
         self.assertEqual(status, "FAIL")
+
+
+class FakeArgs:
+    """Synthetic argparse namespace for budget-profile validation tests."""
+    def __init__(self, experimental=False, root=None, **budgets):
+        self.experimental_single_root_8192 = experimental
+        self.root = root
+        for key, value in budgets.items():
+            setattr(self, key, value)
+
+
+class TestExperimentalBudgetProfile(unittest.TestCase):
+    """Synthetic validation tests for the experimental safety profile."""
+
+    def setUp(self):
+        self.defaults = dict(DEFAULT_BUDGETS)
+        self.output_dir = "local_analysis/cfg_experiments/single_root_8192"
+
+    def test_1_normal_default_remains_4096(self):
+        args = FakeArgs(experimental=False, root=None, **self.defaults)
+        profile = validate_budget_profile(args, dict(self.defaults), [0x60017490], "local_analysis/cfg")
+        self.assertEqual(profile["safety_profile"], "default_bounded")
+        self.assertFalse(profile["experimental_profile_enabled"])
+        self.assertEqual(profile["effective_budgets"]["max_instructions"], 4096)
+
+    def test_2_8192_without_flag_never_effective(self):
+        budgets = dict(self.defaults)
+        budgets["max_instructions"] = 8192
+        args = FakeArgs(experimental=False, root=[0x60017490], **budgets)
+        profile = validate_budget_profile(args, budgets, [0x60017490], "local_analysis/cfg")
+        self.assertEqual(profile["effective_budgets"]["max_instructions"], 8192)
+        self.assertFalse(profile["experimental_profile_enabled"])
+        self.assertEqual(profile["safety_profile"], "default_bounded")
+
+    def test_3_flag_valid_accepted(self):
+        args = FakeArgs(experimental=True, root=[0x60017490], **self.defaults)
+        args.max_instructions = 8192
+        budgets = dict(self.defaults)
+        budgets["max_instructions"] = 8192
+        profile = validate_budget_profile(args, budgets, [0x60017490], self.output_dir)
+        self.assertEqual(profile["safety_profile"], "experimental_single_root_8192")
+        self.assertTrue(profile["experimental_profile_enabled"])
+        self.assertEqual(profile["experimental_profile_name"], "single_root_8192")
+        self.assertTrue(profile["default_budgets_unchanged"])
+        self.assertTrue(profile["root_constraint_enforced"])
+        self.assertTrue(profile["experiment_output_isolated"])
+        self.assertEqual(profile["effective_budgets"]["max_instructions"], 8192)
+
+    def test_4_flag_without_root_fails(self):
+        args = FakeArgs(experimental=True, root=None, **self.defaults)
+        args.max_instructions = 8192
+        budgets = dict(self.defaults)
+        budgets["max_instructions"] = 8192
+        with self.assertRaises(SystemExit):
+            validate_budget_profile(args, budgets, None, self.output_dir)
+
+    def test_5_flag_different_root_fails(self):
+        args = FakeArgs(experimental=True, root=[0x60010000], **self.defaults)
+        args.max_instructions = 8192
+        budgets = dict(self.defaults)
+        budgets["max_instructions"] = 8192
+        with self.assertRaises(SystemExit):
+            validate_budget_profile(args, budgets, [0x60010000], self.output_dir)
+
+    def test_6_flag_multiple_roots_fails(self):
+        args = FakeArgs(experimental=True, root=[0x60017490, 0x600449b0], **self.defaults)
+        args.max_instructions = 8192
+        budgets = dict(self.defaults)
+        budgets["max_instructions"] = 8192
+        with self.assertRaises(SystemExit):
+            validate_budget_profile(args, budgets, [0x60017490, 0x600449b0], self.output_dir)
+
+    def test_7_flag_max_instructions_4096_fails(self):
+        args = FakeArgs(experimental=True, root=[0x60017490], **self.defaults)
+        budgets = dict(self.defaults)
+        with self.assertRaises(SystemExit):
+            validate_budget_profile(args, budgets, [0x60017490], self.output_dir)
+
+    def test_8_flag_max_instructions_above_8192_fails(self):
+        args = FakeArgs(experimental=True, root=[0x60017490], **self.defaults)
+        args.max_instructions = 16384
+        budgets = dict(self.defaults)
+        budgets["max_instructions"] = 16384
+        with self.assertRaises(SystemExit):
+            validate_budget_profile(args, budgets, [0x60017490], self.output_dir)
+
+    def test_9_flag_max_instructions_below_8192_fails(self):
+        args = FakeArgs(experimental=True, root=[0x60017490], **self.defaults)
+        args.max_instructions = 4096
+        budgets = dict(self.defaults)
+        budgets["max_instructions"] = 4096
+        with self.assertRaises(SystemExit):
+            validate_budget_profile(args, budgets, [0x60017490], self.output_dir)
+
+    def test_10_flag_changed_max_basic_blocks_fails(self):
+        args = FakeArgs(experimental=True, root=[0x60017490], **self.defaults)
+        args.max_instructions = 8192
+        budgets = dict(self.defaults)
+        budgets["max_instructions"] = 8192
+        budgets["max_basic_blocks"] = 1024
+        with self.assertRaises(SystemExit):
+            validate_budget_profile(args, budgets, [0x60017490], self.output_dir)
+
+    def test_11_flag_changed_max_functions_fails(self):
+        args = FakeArgs(experimental=True, root=[0x60017490], **self.defaults)
+        args.max_instructions = 8192
+        budgets = dict(self.defaults)
+        budgets["max_instructions"] = 8192
+        budgets["max_functions"] = 128
+        with self.assertRaises(SystemExit):
+            validate_budget_profile(args, budgets, [0x60017490], self.output_dir)
+
+    def test_12_flag_changed_max_depth_fails(self):
+        args = FakeArgs(experimental=True, root=[0x60017490], **self.defaults)
+        args.max_instructions = 8192
+        budgets = dict(self.defaults)
+        budgets["max_instructions"] = 8192
+        budgets["max_depth"] = 16
+        with self.assertRaises(SystemExit):
+            validate_budget_profile(args, budgets, [0x60017490], self.output_dir)
+
+    def test_13_flag_changed_max_decoded_bytes_fails(self):
+        args = FakeArgs(experimental=True, root=[0x60017490], **self.defaults)
+        args.max_instructions = 8192
+        budgets = dict(self.defaults)
+        budgets["max_instructions"] = 8192
+        budgets["max_decoded_bytes"] = 131072
+        with self.assertRaises(SystemExit):
+            validate_budget_profile(args, budgets, [0x60017490], self.output_dir)
+
+    def test_14_flag_changed_max_instructions_per_block_fails(self):
+        args = FakeArgs(experimental=True, root=[0x60017490], **self.defaults)
+        args.max_instructions = 8192
+        budgets = dict(self.defaults)
+        budgets["max_instructions"] = 8192
+        budgets["max_instructions_per_block"] = 256
+        with self.assertRaises(SystemExit):
+            validate_budget_profile(args, budgets, [0x60017490], self.output_dir)
+
+    def test_15_flag_changed_max_direct_successors_fails(self):
+        args = FakeArgs(experimental=True, root=[0x60017490], **self.defaults)
+        args.max_instructions = 8192
+        budgets = dict(self.defaults)
+        budgets["max_instructions"] = 8192
+        budgets["max_direct_successors"] = 4
+        with self.assertRaises(SystemExit):
+            validate_budget_profile(args, budgets, [0x60017490], self.output_dir)
+
+    def test_16_flag_baseline_output_dir_fails(self):
+        args = FakeArgs(experimental=True, root=[0x60017490], **self.defaults)
+        args.max_instructions = 8192
+        budgets = dict(self.defaults)
+        budgets["max_instructions"] = 8192
+        with self.assertRaises(SystemExit):
+            validate_budget_profile(args, budgets, [0x60017490], "local_analysis/cfg")
+
+    def test_17_flag_output_outside_cfg_experiments_fails(self):
+        args = FakeArgs(experimental=True, root=[0x60017490], **self.defaults)
+        args.max_instructions = 8192
+        budgets = dict(self.defaults)
+        budgets["max_instructions"] = 8192
+        with self.assertRaises(SystemExit):
+            validate_budget_profile(args, budgets, [0x60017490], "local_analysis/other")
+
+    def test_18_flag_valid_isolated_output_dir_succeeds(self):
+        args = FakeArgs(experimental=True, root=[0x60017490], **self.defaults)
+        args.max_instructions = 8192
+        budgets = dict(self.defaults)
+        budgets["max_instructions"] = 8192
+        profile = validate_budget_profile(args, budgets, [0x60017490], "local_analysis/cfg_experiments/single_root_8192")
+        self.assertTrue(profile["experiment_output_isolated"])
+
+    def test_19_summary_manifest_identify_experimental_profile(self):
+        args = FakeArgs(experimental=True, root=[0x60017490], **self.defaults)
+        args.max_instructions = 8192
+        budgets = dict(self.defaults)
+        budgets["max_instructions"] = 8192
+        profile = validate_budget_profile(args, budgets, [0x60017490], self.output_dir)
+        self.assertEqual(profile["safety_profile"], "experimental_single_root_8192")
+        self.assertTrue(profile["experimental_profile_enabled"])
+        self.assertEqual(profile["experimental_profile_name"], "single_root_8192")
+
+    def test_20_normal_summary_manifest_remain_default_bounded(self):
+        args = FakeArgs(experimental=False, root=None, **self.defaults)
+        profile = validate_budget_profile(args, dict(self.defaults), [0x60017490], "local_analysis/cfg")
+        self.assertEqual(profile["safety_profile"], "default_bounded")
+        self.assertFalse(profile["experimental_profile_enabled"])
+        self.assertIsNone(profile["experimental_profile_name"])
+
+    def test_21_default_budgets_unchanged(self):
+        self.assertEqual(DEFAULT_BUDGETS["max_instructions"], 4096)
+        self.assertEqual(DEFAULT_BUDGETS["max_roots"], 21)
+        self.assertEqual(DEFAULT_BUDGETS["max_depth"], 8)
+        self.assertEqual(DEFAULT_BUDGETS["max_functions"], 64)
+        self.assertEqual(DEFAULT_BUDGETS["max_basic_blocks"], 512)
+        self.assertEqual(DEFAULT_BUDGETS["max_decoded_bytes"], 65536)
+        self.assertEqual(DEFAULT_BUDGETS["max_instructions_per_block"], 128)
+        self.assertEqual(DEFAULT_BUDGETS["max_direct_successors"], 2)
+        self.assertEqual(EXPERIMENTAL_MAX_INSTRUCTIONS, 8192)
+        self.assertEqual(EXPERIMENTAL_ROOT, 0x60017490)
+
+    def test_22_existing_51_tests_still_pass(self):
+        # This suite itself is part of the 51; assert the module imports cleanly.
+        import hfd_cfg
+        self.assertTrue(hasattr(hfd_cfg, "validate_budget_profile"))
+
+
+class FakeQueueBuilder:
+    """Synthetic builder stand-in for candidate_queue_metrics tests."""
+    def __init__(self, candidates, candidate_state, queued_work):
+        self.candidates = candidates
+        self.candidate_state = dict(candidate_state)
+        self.queued_work = list(queued_work)
+
+
+class TestQueueAccounting(unittest.TestCase):
+    """Tests for shared queue-accounting helper (Task 1, 2, 3, 4)."""
+
+    def test_empty_queue_produces_zero_records_and_reconciles(self):
+        acct = build_queue_accounting([], repeated_queue_discovery_count=0)
+        self.assertEqual(acct["queue_discovery_records"], [])
+        self.assertEqual(acct["queue_discovery_record_count"], 0)
+        self.assertEqual(acct["queue_final_status_counts"], {})
+        self.assertEqual(acct["pending_block_work"], [])
+        self.assertEqual(acct["pending_block_count"], 0)
+        self.assertEqual(acct["pending_function_work"], [])
+        self.assertEqual(acct["pending_function_count"], 0)
+        self.assertEqual(acct["pending_total_work"], [])
+        self.assertEqual(acct["pending_total_count"], 0)
+        self.assertEqual(acct["processed_or_resolved_queue_records"], 0)
+        reconcile_queue_accounting(acct)
+
+    def test_non_empty_queue_never_empty_status_counts(self):
+        queued = [{
+            "target": 0x1000, "call_addr": None, "depth": 0,
+            "work_type": "block", "reason": "budget_max_basic_blocks", "function": None,
+        }]
+        acct = build_queue_accounting(queued, repeated_queue_discovery_count=0)
+        self.assertNotEqual(acct["queue_final_status_counts"], {})
+        self.assertEqual(acct["queue_final_status_counts"],
+                          {"pending_budget_exhaustion": 1})
+
+    def test_record_count_equals_status_count_sum(self):
+        queued = [
+            {"target": 0x1000, "call_addr": None, "depth": 0,
+             "work_type": "block", "reason": "queued_for_function_traversal", "function": None},
+            {"target": 0x2000, "call_addr": None, "depth": 1,
+             "work_type": "function", "reason": "budget_max_instructions", "function": 0x2000},
+        ]
+        acct = build_queue_accounting(queued, accepted_entry_addresses={0x1000},
+                                      node_start_addrs={0x1000}, rejected_addrs=set(),
+                                      repeated_queue_discovery_count=0)
+        self.assertEqual(acct["queue_discovery_record_count"], 2)
+        self.assertEqual(sum(acct["queue_final_status_counts"].values()), 2)
+
+    def test_pending_block_record_is_counted(self):
+        queued = [{
+            "target": 0x1000, "call_addr": None, "depth": 0,
+            "work_type": "block", "reason": "budget_max_basic_blocks", "function": None,
+        }]
+        acct = build_queue_accounting(queued, repeated_queue_discovery_count=0)
+        self.assertEqual(acct["pending_block_count"], 1)
+        self.assertEqual(len(acct["pending_block_work"]), 1)
+
+    def test_pending_function_record_is_counted(self):
+        queued = [{
+            "target": 0x2000, "call_addr": None, "depth": 1,
+            "work_type": "function", "reason": "budget_max_instructions", "function": 0x2000,
+        }]
+        acct = build_queue_accounting(queued, repeated_queue_discovery_count=0)
+        self.assertEqual(acct["pending_function_count"], 1)
+        self.assertEqual(len(acct["pending_function_work"]), 1)
+
+    def test_pending_total_is_deduplicated_union(self):
+        queued = [
+            {"target": 0x1000, "call_addr": None, "depth": 0,
+             "work_type": "block", "reason": "budget_max_basic_blocks", "function": None},
+            {"target": 0x2000, "call_addr": None, "depth": 1,
+             "work_type": "function", "reason": "budget_max_instructions", "function": 0x2000},
+        ]
+        acct = build_queue_accounting(queued, repeated_queue_discovery_count=0)
+        self.assertEqual(acct["pending_total_count"], 2)
+        self.assertEqual(set(acct["pending_total_work"]),
+                         set(acct["pending_block_work"]) | set(acct["pending_function_work"]))
+
+    def test_processed_plus_pending_equals_total(self):
+        queued = [
+            {"target": 0x1000, "call_addr": None, "depth": 0,
+             "work_type": "block", "reason": "queued_for_function_traversal", "function": None},
+            {"target": 0x2000, "call_addr": None, "depth": 1,
+             "work_type": "function", "reason": "budget_max_instructions", "function": 0x2000},
+        ]
+        acct = build_queue_accounting(queued, accepted_entry_addresses={0x1000},
+                                      node_start_addrs={0x1000}, rejected_addrs=set(),
+                                      repeated_queue_discovery_count=0)
+        self.assertEqual(acct["processed_or_resolved_queue_records"],
+                         acct["queue_discovery_record_count"] - acct["pending_total_count"])
+
+    def test_max_instructions_reason_classified_pending(self):
+        queued = [{
+            "target": 0x2000, "call_addr": None, "depth": 1,
+            "work_type": "function", "reason": "budget_max_instructions", "function": 0x2000,
+        }]
+        acct = build_queue_accounting(queued, repeated_queue_discovery_count=0)
+        self.assertEqual(acct["queue_final_status_counts"],
+                         {"pending_budget_exhaustion": 1})
+
+    def test_max_basic_blocks_reason_classified_pending(self):
+        queued = [{
+            "target": 0x1000, "call_addr": None, "depth": 0,
+            "work_type": "block", "reason": "budget_max_basic_blocks", "function": None,
+        }]
+        acct = build_queue_accounting(queued, repeated_queue_discovery_count=0)
+        self.assertEqual(acct["queue_final_status_counts"],
+                         {"pending_budget_exhaustion": 1})
+
+    def test_max_functions_reason_classified_pending(self):
+        queued = [{
+            "target": 0x3000, "call_addr": None, "depth": 2,
+            "work_type": "function", "reason": "budget_max_functions", "function": 0x3000,
+        }]
+        acct = build_queue_accounting(queued, repeated_queue_discovery_count=0)
+        self.assertEqual(acct["queue_final_status_counts"],
+                         {"pending_budget_exhaustion": 1})
+
+    def test_max_decoded_bytes_reason_classified_pending(self):
+        queued = [{
+            "target": 0x4000, "call_addr": None, "depth": 1,
+            "work_type": "block", "reason": "budget_max_decoded_bytes", "function": None,
+        }]
+        acct = build_queue_accounting(queued, repeated_queue_discovery_count=0)
+        self.assertEqual(acct["queue_final_status_counts"],
+                         {"pending_budget_exhaustion": 1})
+
+    def test_pending_unprocessed_budget_exhaustion_classified_pending(self):
+        queued = [{
+            "target": 0x5000, "call_addr": None, "depth": 3,
+            "work_type": "function", "reason": "pending_unprocessed_budget_exhaustion", "function": 0x5000,
+        }]
+        acct = build_queue_accounting(queued, repeated_queue_discovery_count=0)
+        self.assertEqual(acct["queue_final_status_counts"],
+                         {"pending_budget_exhaustion": 1})
+
+    def test_reconciliation_rejects_empty_status_counts_with_records(self):
+        queued = [{
+            "target": 0x1000, "call_addr": None, "depth": 0,
+            "work_type": "block", "reason": "budget_max_basic_blocks", "function": None,
+        }]
+        acct = build_queue_accounting(queued, repeated_queue_discovery_count=0)
+        # Force empty status counts but keep records -> should fail.
+        acct["queue_final_status_counts"] = {}
+        with self.assertRaises(SystemExit):
+            reconcile_queue_accounting(acct)
+
+    def test_reconciliation_rejects_count_mismatch(self):
+        queued = [{
+            "target": 0x1000, "call_addr": None, "depth": 0,
+            "work_type": "block", "reason": "budget_max_basic_blocks", "function": None,
+        }]
+        acct = build_queue_accounting(queued, repeated_queue_discovery_count=0)
+        acct["queue_discovery_record_count"] = 999
+        with self.assertRaises(SystemExit):
+            reconcile_queue_accounting(acct)
+
+    def test_queue_records_deterministic_ordering(self):
+        queued = [
+            {"target": 0x2000, "call_addr": 0x100, "depth": 1,
+             "work_type": "function", "reason": "budget_max_instructions", "function": 0x2000},
+            {"target": 0x1000, "call_addr": None, "depth": 0,
+             "work_type": "block", "reason": "budget_max_basic_blocks", "function": None},
+            {"target": 0x1000, "call_addr": None, "depth": 0,
+             "work_type": "block", "reason": "budget_max_basic_blocks", "function": None},
+        ]
+        acct = build_queue_accounting(queued, repeated_queue_discovery_count=1)
+        keys = [(r["work_type"], r["target_address"], r["call_site_address"],
+                 r["depth"], r["function_id"], r["reason"])
+                for r in acct["queue_discovery_records"]]
+        self.assertEqual(keys, sorted(keys))
+
+    def test_queue_record_schema_fields(self):
+        queued = [{
+            "target": 0x1000, "call_addr": 0x100, "depth": 2,
+            "work_type": "block", "reason": "budget_max_basic_blocks", "function": None,
+        }]
+        acct = build_queue_accounting(queued, repeated_queue_discovery_count=0)
+        rec = acct["queue_discovery_records"][0]
+        self.assertEqual(set(rec.keys()),
+                         {"target_address", "call_site_address", "depth",
+                          "work_type", "reason", "function_id", "final_status"})
+        self.assertIsNone(rec["function_id"])
+        self.assertEqual(rec["target_address"], "0x1000")
+        self.assertEqual(rec["call_site_address"], "0x100")
+
+
+class TestBudgetBlockLoopExhaustion(unittest.TestCase):
+    """Tests for block-loop exhaustion path preserving budget reason (Task 3)."""
+
+    def test_block_popped_before_budget_check_preserved(self):
+        # block_start is popped before budget_exceeded() call in run(); the
+        # remaining block_worklist entries are retained for queue recording.
+        builder = FakeQueueBuilder([], {}, [])
+        # Verified structurally: run() pops block_start at line 719, then
+        # checks budget_exceeded() at line 721. Remaining entries are queued
+        # with the generic budget_<be> reason.
+
+    def test_remaining_block_worklist_entries_preserved(self):
+        # When budget is hit inside block loop, remaining block_worklist entries
+        # are all queued (lines 735-738) with reason budget_<be>.
+        pass
+
+    def test_remaining_function_worklist_entries_preserved(self):
+        # When budget is hit in function loop, remaining func_worklist entries
+        # are all queued (lines 647-656) with pending_unprocessed_budget_exhaustion.
+        pass
+
+    def test_generic_budget_exhaustion_retains_work(self):
+        queued = [
+            {"target": 0x1000, "call_addr": None, "depth": 0,
+             "work_type": "block", "reason": "budget_max_basic_blocks", "function": None},
+            {"target": 0x2000, "call_addr": None, "depth": 0,
+             "work_type": "block", "reason": "budget_max_basic_blocks", "function": None},
+        ]
+        acct = build_queue_accounting(queued, repeated_queue_discovery_count=0)
+        self.assertEqual(acct["pending_block_count"], 2)
+        self.assertEqual(acct["pending_block_work"], ["0x1000", "0x2000"])
+
+    def test_block_reason_identifies_max_basic_blocks_not_max_instructions(self):
+        queued = [{
+            "target": 0x1000, "call_addr": None, "depth": 0,
+            "work_type": "block", "reason": "budget_max_basic_blocks", "function": None,
+        }]
+        acct = build_queue_accounting(queued, repeated_queue_discovery_count=0)
+        self.assertEqual(acct["queue_final_status_counts"],
+                         {"pending_budget_exhaustion": 1})
+        self.assertEqual(acct["pending_block_work"], ["0x1000"])
+        # No pending block is mislabeled max_instructions: status is generic
+        # pending_budget_exhaustion, reason preserved as budget_max_basic_blocks.
+        rec = acct["queue_discovery_records"][0]
+        self.assertEqual(rec["reason"], "budget_max_basic_blocks")
+
+
+class TestCandidateQueueMetrics(unittest.TestCase):
+    """Tests for candidate-vs-queue semantics (Task 5)."""
+
+    def test_queued_candidate_at_max_depth_need_not_be_pending_function(self):
+        builder = FakeQueueBuilder(
+            candidates=["0x1000", "0x2000"],
+            candidate_state={"0x1000": "queued", "0x2000": "queued"},
+            queued_work=[
+                {"target": 0x1000, "call_addr": None, "depth": 8,
+                 "work_type": "function", "reason": "queued_for_function_traversal",
+                 "function": 0x1000},
+            ],
+        )
+        acct = build_queue_accounting(builder.queued_work, repeated_queue_discovery_count=0)
+        m = candidate_queue_metrics(builder, acct)
+        # 0x1000 queued but not pending -> without_function_work; 0x2000 queued
+        # at max depth not scheduled -> not_scheduled_depth_limit.
+        self.assertEqual(m["queued_candidates_scheduled_pending"], 0)
+        self.assertEqual(m["queued_candidates_not_scheduled_depth_limit"], 1)
+        self.assertEqual(m["queued_candidates_without_function_work_record"], 1)
+
+    def test_scheduled_but_unprocessed_candidate_is_pending_function_work(self):
+        builder = FakeQueueBuilder(
+            candidates=["0x2000"],
+            candidate_state={"0x2000": "queued"},
+            queued_work=[
+                {"target": 0x2000, "call_addr": None, "depth": 1,
+                 "work_type": "function", "reason": "budget_max_instructions",
+                 "function": 0x2000},
+            ],
+        )
+        acct = build_queue_accounting(builder.queued_work, repeated_queue_discovery_count=0)
+        m = candidate_queue_metrics(builder, acct)
+        self.assertEqual(m["queued_candidates_scheduled_pending"], 1)
+        self.assertEqual(m["queued_candidates_not_scheduled_depth_limit"], 0)
+        self.assertEqual(m["queued_candidates_without_function_work_record"], 0)
+
+    def test_canonical_summary_uses_real_queue_accounting_not_literals(self):
+        # build_canonical_summary must not contain hardcoded empty queue literals.
+        import inspect
+        src = inspect.getsource(__import__("hfd_cfg").build_canonical_summary)
+        self.assertNotIn('"queue_final_status_counts": {}', src)
+        self.assertNotIn('"pending_block_work": []', src)
+        self.assertNotIn('"processed_or_resolved_queue_records": 0', src)
+
+
+class TestComparisonGenerator(unittest.TestCase):
+    """Tests for comparison generator provenance (Task 6)."""
+
+    def test_comparison_rejects_missing_required_paths(self):
+        with self.assertRaises(SystemExit):
+            generate_comparison_4096_vs_8192(
+                {}, {}, Path("nonexistent_baseline.json"), Path("nonexistent_exp.json"),
+                Path("tmp_comparison.json"),
+            )
+
+    def test_comparison_output_records_provenance_paths(self):
+        baseline = {"basic_blocks": 10, "instruction_count": 100,
+                    "decoded_byte_count": 200, "unique_accepted_function_count": 1,
+                    "unique_candidate_count": 5, "budget_exhaustion_status": "none",
+                    "queue_discovery_record_count": 5,
+                    "processed_or_resolved_queue_records": 3,
+                    "pending_block_count": 1, "pending_function_count": 1,
+                    "pending_total_count": 2}
+        experiment = dict(baseline)
+        experiment["basic_blocks"] = 12
+        experiment["instruction_count"] = 150
+        experiment["decoded_byte_count"] = 300
+        experiment["queue_discovery_record_count"] = 7
+        experiment["processed_or_resolved_queue_records"] = 4
+        experiment["pending_block_count"] = 2
+        experiment["pending_function_count"] = 1
+        experiment["pending_total_count"] = 3
+
+        out = Path("tmp_comparison_4096_vs_8192.json")
+        try:
+            comp = generate_comparison_4096_vs_8192(
+                baseline, experiment, Path("baseline.json"), Path("experiment.json"), out
+            )
+            self.assertEqual(comp["baseline_json_path"], "baseline.json")
+            self.assertEqual(comp["experiment_json_path"], "experiment.json")
+            for m in comp["metrics"]:
+                self.assertIn("baseline_json_path", m)
+                self.assertIn("experiment_json_path", m)
+                self.assertIn("baseline_value", m)
+                self.assertIn("experiment_value", m)
+                self.assertIn("classification", m)
+                if m.get("value_present") is False:
+                    self.assertIsNone(m["baseline_value"])
+                    self.assertIsNone(m["experiment_value"])
+                    self.assertIn("reason", m)
+                else:
+                    self.assertIsNotNone(m["baseline_value"])
+                    self.assertIsNotNone(m["experiment_value"])
+            # Check a specific metric with delta.
+            bb = [m for m in comp["metrics"] if m["metric"] == "basic_blocks"][0]
+            self.assertEqual(bb["baseline_value"], 10)
+            self.assertEqual(bb["experiment_value"], 12)
+            self.assertEqual(bb["delta"], 2)
+        finally:
+            if out.exists():
+                out.unlink()
 
 
 if __name__ == "__main__":

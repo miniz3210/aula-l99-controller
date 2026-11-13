@@ -33,12 +33,96 @@ DEFAULT_BUDGETS = {
     "max_direct_successors": 2,
 }
 
+EXPERIMENTAL_BUDGET_FIELDS = frozenset({
+    "max_roots",
+    "max_depth",
+    "max_functions",
+    "max_basic_blocks",
+    "max_decoded_bytes",
+    "max_instructions_per_block",
+    "max_direct_successors",
+})
+
+
+def validate_budget_profile(args, requested_budgets, roots, output_dir):
+    """Validate the experimental single-root 8192 safety profile.
+
+    Returns a dict describing the enforced profile. Raises SystemExit (fail
+    loudly) on any violation. Does not traverse or modify firmware state.
+    """
+    experimental_enabled = bool(getattr(args, EXPERIMENTAL_FLAG, False))
+
+    profile = {
+        "safety_profile": "default_bounded",
+        "experimental_profile_enabled": False,
+        "experimental_profile_name": None,
+        "requested_budgets": dict(requested_budgets),
+        "effective_budgets": dict(requested_budgets),
+        "default_budgets_unchanged": True,
+        "root_constraint_enforced": False,
+        "experiment_output_isolated": False,
+    }
+
+    if not experimental_enabled:
+        return profile
+
+    # --- Experiment requires exactly one explicit root ---
+    explicit_root_count = 0 if args.root is None else len(args.root)
+    if explicit_root_count == 0:
+        print("ERROR: --experimental-single-root-8192 requires an explicit root", file=sys.stderr)
+        raise SystemExit(1)
+    if explicit_root_count != 1:
+        print(f"ERROR: --experimental-single-root-8192 requires exactly one root, got {explicit_root_count}", file=sys.stderr)
+        raise SystemExit(1)
+    root = roots[0]
+    if root != EXPERIMENTAL_ROOT:
+        print(f"ERROR: --experimental-single-root-8192 requires root 0x{EXPERIMENTAL_ROOT:08X}, got 0x{root:08X}", file=sys.stderr)
+        raise SystemExit(1)
+
+    # --- max_instructions must be exactly 8192 ---
+    if requested_budgets["max_instructions"] != EXPERIMENTAL_MAX_INSTRUCTIONS:
+        print(f"ERROR: --experimental-single-root-8192 requires --max_instructions {EXPERIMENTAL_MAX_INSTRUCTIONS}, got {requested_budgets['max_instructions']}", file=sys.stderr)
+        raise SystemExit(1)
+
+    # --- All other budgets must remain at existing defaults ---
+    for key in EXPERIMENTAL_BUDGET_FIELDS:
+        if requested_budgets[key] != DEFAULT_BUDGETS[key]:
+            print(f"ERROR: --experimental-single-root-8192 requires {key}={DEFAULT_BUDGETS[key]}, got {requested_budgets[key]}", file=sys.stderr)
+            raise SystemExit(1)
+
+    # --- Output directory must be isolated under cfg_experiments, not baseline ---
+    output_dir_str = str(output_dir).replace("\\", "/")
+    parent = output_dir_str.rsplit("/", 1)[0] if "/" in output_dir_str else ""
+    if parent != EXPERIMENT_OUTPUT_PARENT:
+        print(f"ERROR: --experimental-single-root-8192 output directory must be under {EXPERIMENT_OUTPUT_PARENT}/, got {output_dir_str}", file=sys.stderr)
+        raise SystemExit(1)
+    if output_dir_str == BASELINE_OUTPUT_DIR or output_dir_str.startswith(BASELINE_OUTPUT_DIR + "/"):
+        print(f"ERROR: --experimental-single-root-8192 output directory must not be the baseline directory {BASELINE_OUTPUT_DIR}", file=sys.stderr)
+        raise SystemExit(1)
+
+    profile["safety_profile"] = "experimental_single_root_8192"
+    profile["experimental_profile_enabled"] = True
+    profile["experimental_profile_name"] = EXPERIMENTAL_PROFILE_NAME
+    profile["default_budgets_unchanged"] = True
+    profile["root_constraint_enforced"] = True
+    profile["experiment_output_isolated"] = True
+    profile["effective_budgets"]["max_instructions"] = EXPERIMENTAL_MAX_INSTRUCTIONS
+    return profile
+
+
 PROHIBITED_START = 0x60031198
 PROHIBITED_END = 0x600315D0
 CANDIDATE_IMAGE_BASE = 0x60010000
 DEFAULT_ROOTS = [0x60017490]
 
 CFG_SCHEMA_VERSION = "hfd-cfg-1.0"
+
+EXPERIMENTAL_FLAG = "experimental_single_root_8192"
+EXPERIMENTAL_PROFILE_NAME = "single_root_8192"
+EXPERIMENTAL_MAX_INSTRUCTIONS = 8192
+EXPERIMENTAL_ROOT = 0x60017490
+EXPERIMENT_OUTPUT_PARENT = "local_analysis/cfg_experiments"
+BASELINE_OUTPUT_DIR = "local_analysis/cfg"
 
 VERIFIED = "VERIFIED"
 STRONG_STRUCTURAL_INFERENCE = "STRONG_STRUCTURAL_INFERENCE"
@@ -400,6 +484,254 @@ def decode_instruction(mcdis_mod, data, base, addr):
     }
 
 
+# ---------------------------------------------------------------------------
+# Shared queue-accounting helper (Task 1)
+# ---------------------------------------------------------------------------
+
+def build_queue_accounting(
+    queued_work,
+    accepted_entry_addresses=None,
+    candidate_states=None,
+    node_start_addrs=None,
+    rejected_addrs=None,
+    repeated_queue_discovery_count=0,
+):
+    """Pure shared queue-accounting helper.
+
+    Extracts the real accounting logic from the legacy _build_output path into
+    one shared implementation used by _build_output, build_canonical_summary,
+    cfg_report generation, cfg_reproducibility generation, and canonical
+    preview output. Returns all queue aggregates required by the canonical
+    output schema.
+    """
+    accepted_entry_addresses = accepted_entry_addresses or set()
+    accepted_entry_addrs = set()
+    for a in accepted_entry_addresses:
+        accepted_entry_addrs.add(int(a, 16) if isinstance(a, str) else int(a))
+
+    node_start_addrs = node_start_addrs or set()
+    rejected_addrs = rejected_addrs or set()
+    candidate_states = candidate_states or {}
+
+    repeated_count = int(repeated_queue_discovery_count)
+
+    # Stable deduplication identity (preserved from legacy implementation).
+    unique_queue_records = {}
+    for q in queued_work:
+        tgt = q.get("target", q.get("address"))
+        key = (
+            tgt,
+            q.get("call_addr"),
+            q["depth"],
+            q["work_type"],
+            q["reason"],
+            q.get("function"),
+        )
+        if key in unique_queue_records:
+            continue
+        unique_queue_records[key] = q
+
+    def queue_status(q):
+        reason = q["reason"]
+        work_type = q["work_type"]
+        tgt = q.get("target", q.get("address"))
+        # Generic budget exhaustion: any reason beginning with budget_, plus
+        # pending_unprocessed_budget_exhaustion, classifies as pending budget
+        # exhaustion (Task 3).
+        if reason == "pending_unprocessed_budget_exhaustion" or reason.startswith("budget_"):
+            return "pending_budget_exhaustion"
+        if reason == "queued_for_function_traversal":
+            if tgt is None:
+                return "unresolved"
+            tgt_int = int(tgt, 16) if isinstance(tgt, str) else tgt
+            if tgt_int in accepted_entry_addrs:
+                return "accepted"
+            if tgt_int in node_start_addrs:
+                return "existing_node"
+            if tgt_int in rejected_addrs:
+                return "rejected"
+            return "unresolved"
+        if reason == "existing_node":
+            return "existing_node"
+        if reason == "existing_function":
+            return "existing_function"
+        if reason == "rejected":
+            return "rejected"
+        return "unresolved"
+
+    pending_block_addrs = set()
+    pending_function_addrs = set()
+    status_counts = {}
+    for key, q in unique_queue_records.items():
+        st = queue_status(q)
+        status_counts[st] = status_counts.get(st, 0) + 1
+        if st == "pending_budget_exhaustion":
+            tgt = q.get("target", q.get("address"))
+            if tgt is not None:
+                if q["work_type"] == "block":
+                    pending_block_addrs.add(tgt)
+                elif q["work_type"] == "function":
+                    pending_function_addrs.add(tgt)
+
+    pending_total_addrs = pending_block_addrs | pending_function_addrs
+    processed_or_resolved_count = sum(
+        v for k, v in status_counts.items() if k != "pending_budget_exhaustion"
+    )
+
+    status_count_sum = sum(status_counts.values())
+    if status_count_sum != len(unique_queue_records):
+        raise SystemExit(
+            "CONSISTENCY FAILURE: queue status counts "
+            f"{status_counts} sum to {status_count_sum} "
+            f"but unique queue records total {len(unique_queue_records)}"
+        )
+
+    # Stable queue-record schema (Task 2).
+    records = []
+    for key, q in unique_queue_records.items():
+        tgt = q.get("target", q.get("address"))
+        call_addr = q.get("call_addr")
+        fn = q.get("function")
+        records.append({
+            "target_address": hex(tgt) if tgt is not None else None,
+            "call_site_address": hex(call_addr) if call_addr is not None else None,
+            "depth": q["depth"],
+            "work_type": q["work_type"],
+            "reason": q["reason"],
+            "function_id": hex(fn) if fn is not None else None,
+            "final_status": queue_status(q),
+        })
+
+    records.sort(key=lambda r: (
+        r["work_type"],
+        r["target_address"] if r["target_address"] is not None else "",
+        r["call_site_address"] if r["call_site_address"] is not None else "",
+        r["depth"],
+        r["function_id"] if r["function_id"] is not None else "",
+        r["reason"],
+    ))
+
+    return {
+        "queue_discovery_records": records,
+        "queue_discovery_record_count": len(unique_queue_records),
+        "queue_final_status_counts": status_counts,
+        "pending_block_work": [hex(a) for a in sorted(pending_block_addrs)],
+        "pending_block_count": len(pending_block_addrs),
+        "pending_function_work": [hex(a) for a in sorted(pending_function_addrs)],
+        "pending_function_count": len(pending_function_addrs),
+        "pending_total_work": [hex(a) for a in sorted(pending_total_addrs)],
+        "pending_total_count": len(pending_total_addrs),
+        "processed_or_resolved_queue_records": processed_or_resolved_count,
+        "repeated_queue_discovery_count": repeated_count,
+        "queue_reconciliation_status": {
+            "status_count_sum": status_count_sum,
+            "unique_record_count": len(unique_queue_records),
+            "processed_plus_pending": processed_or_resolved_count + len(pending_total_addrs),
+            "total_records": len(unique_queue_records),
+        },
+    }
+
+
+def reconcile_queue_accounting(accounting):
+    counts = accounting["queue_final_status_counts"]
+    total = accounting["queue_discovery_record_count"]
+    records = accounting["queue_discovery_records"]
+    pending_block = accounting["pending_block_work"]
+    pending_function = accounting["pending_function_work"]
+    pending_total = accounting["pending_total_work"]
+    processed = accounting["processed_or_resolved_queue_records"]
+    pending_total_count = accounting["pending_total_count"]
+
+    if sum(counts.values()) != total:
+        raise SystemExit(
+            "QUEUE RECONCILIATION FAILURE: sum(queue_final_status_counts.values())="
+            f"{sum(counts.values())} != queue_discovery_record_count={total}"
+            f" (counts={counts})"
+        )
+    if len(records) != total:
+        raise SystemExit(
+            f"QUEUE RECONCILIATION FAILURE: len(queue_discovery_records)="
+            f"{len(records)} != queue_discovery_record_count={total}"
+        )
+    if accounting["pending_block_count"] != len(pending_block):
+        raise SystemExit(
+            f"QUEUE RECONCILIATION FAILURE: pending_block_count="
+            f"{accounting['pending_block_count']} != len(pending_block_work)={len(pending_block)}"
+        )
+    if accounting["pending_function_count"] != len(pending_function):
+        raise SystemExit(
+            f"QUEUE RECONCILIATION FAILURE: pending_function_count="
+            f"{accounting['pending_function_count']} != len(pending_function_work)={len(pending_function)}"
+        )
+    if accounting["pending_total_count"] != len(pending_total):
+        raise SystemExit(
+            f"QUEUE RECONCILIATION FAILURE: pending_total_count="
+            f"{accounting['pending_total_count']} != len(pending_total_work)={len(pending_total)}"
+        )
+    expected_total = set(pending_block) | set(pending_function)
+    if set(pending_total) != expected_total or len(pending_total) != len(expected_total):
+        raise SystemExit(
+            "QUEUE RECONCILIATION FAILURE: pending_total_work is not the "
+            f"deduplicated union of pending_block_work and pending_function_work: "
+            f"{sorted(pending_total)} vs {sorted(expected_total)}"
+        )
+    if processed + pending_total_count != total:
+        raise SystemExit(
+            f"QUEUE RECONCILIATION FAILURE: processed_or_resolved_queue_records="
+            f"{processed} + pending_total_count={pending_total_count} = "
+            f"{processed + pending_total_count} != queue_discovery_record_count={total}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Candidate-vs-queue metrics (Task 5)
+# ---------------------------------------------------------------------------
+
+def candidate_queue_metrics(builder, accounting):
+    """Classify queued direct-call candidates into scheduling states.
+
+    Returns metrics distinguishing candidates queued at max depth (not
+    scheduled), scheduled-but-pending due to budget exhaustion, and candidates
+    without a function work record. Never infers classification when the source
+    record lacks evidence; uses UNKNOWN or explicit unclassified counts.
+    """
+    unique_candidates = set(builder.candidates)
+    scheduled_pending = 0
+    not_scheduled_depth_limit = 0
+    without_function_work = 0
+
+    queued_function_targets = set()
+    for q in builder.queued_work:
+        if q.get("work_type") == "function":
+            tgt = q.get("target")
+            if tgt is not None:
+                queued_function_targets.add(tgt)
+
+    pending_function_addrs = set()
+    for a in accounting.get("pending_function_work", []):
+        pending_function_addrs.add(int(a, 16) if isinstance(a, str) else a)
+
+    for c in unique_candidates:
+        c_int = int(c, 16) if isinstance(c, str) else c
+        state = builder.candidate_state.get(c, "queued")
+
+        if c_int in queued_function_targets:
+            if c_int in pending_function_addrs:
+                scheduled_pending += 1
+            else:
+                without_function_work += 1
+        elif state == "queued":
+            not_scheduled_depth_limit += 1
+        else:
+            without_function_work += 1
+
+    return {
+        "queued_candidates_scheduled_pending": scheduled_pending,
+        "queued_candidates_not_scheduled_depth_limit": not_scheduled_depth_limit,
+        "queued_candidates_without_function_work_record": without_function_work,
+    }
+
+
 class CFGBuilder:
     def __init__(self, data, base, roots, budgets, mcdis_mod):
         self.data = data
@@ -645,12 +977,13 @@ class CFGBuilder:
                                 "location": "block_loop",
                             }
                         )
+                    reason = f"budget_{be}"
                     self._add_queued_work(
-                        block_start, None, depth, "block", "budget_max_instructions",
+                        block_start, None, depth, "block", reason,
                     )
                     for remaining_addr in block_worklist:
                         self._add_queued_work(
-                            remaining_addr, None, depth, "block", "budget_max_instructions",
+                            remaining_addr, None, depth, "block", reason,
                         )
                     break
                 if block_start in self.analyzed_blocks:
@@ -991,70 +1324,39 @@ class CFGBuilder:
         # Target rejection counts
         rej_counts = Counter(r["reason"] for r in self.rejected)
 
-        # Queue final-status accounting.
+        # Queue final-status accounting (shared helper, Task 1).
         accepted_entry_addrs = set(accepted_entries) if accepted_entries else set()
-        accepted_entry_addrs = {int(a, 16) if isinstance(a, str) else a for a in accepted_entry_addrs}
         node_start_addrs = {n["start"] for n in self.nodes}
-        rejected_addrs = {int(r["addr"], 16) if isinstance(r.get("addr"), str) else r.get("addr") for r in self.rejected if r.get("addr") is not None}
+        rejected_addrs = {
+            int(r["addr"], 16) if isinstance(r.get("addr"), str) else r.get("addr")
+            for r in self.rejected if r.get("addr") is not None
+        }
 
-        unique_queue_records = {}
-        repeated_count = self.repeated_queue_discovery_count
-        for q in self.queued_work:
-            tgt = q.get("target", q.get("address"))
-            key = (tgt, q.get("call_addr"), q["depth"], q["work_type"], q["reason"], q.get("function"))
-            if key in unique_queue_records:
-                continue
-            unique_queue_records[key] = q
+        accounting = build_queue_accounting(
+            queued_work=self.queued_work,
+            accepted_entry_addresses=accepted_entry_addrs,
+            candidate_states={},
+            node_start_addrs=node_start_addrs,
+            rejected_addrs=rejected_addrs,
+            repeated_queue_discovery_count=self.repeated_queue_discovery_count,
+        )
 
-        def queue_status(q):
-            reason = q["reason"]
-            work_type = q["work_type"]
-            tgt = q.get("target", q.get("address"))
-            if reason == "pending_unprocessed_budget_exhaustion":
-                return "pending_budget_exhaustion"
-            if reason == "budget_max_instructions":
-                return "pending_budget_exhaustion"
-            if reason == "queued_for_function_traversal":
-                if tgt is None:
-                    return "unresolved"
-                if int(tgt) if isinstance(tgt, str) else tgt in accepted_entry_addrs:
-                    return "accepted"
-                if int(tgt) if isinstance(tgt, str) else tgt in node_start_addrs:
-                    return "existing_node"
-                if int(tgt) if isinstance(tgt, str) else tgt in rejected_addrs:
-                    return "rejected"
-                return "unresolved"
-            if reason == "existing_node":
-                return "existing_node"
-            if reason == "existing_function":
-                return "existing_function"
-            if reason == "rejected":
-                return "rejected"
-            return "unresolved"
+        queue_records = accounting["queue_discovery_records"]
+        queue_status_counts = accounting["queue_final_status_counts"]
+        pending_block_work = accounting["pending_block_work"]
+        pending_block_count = accounting["pending_block_count"]
+        pending_function_work = accounting["pending_function_work"]
+        pending_function_count = accounting["pending_function_count"]
+        pending_total_work = accounting["pending_total_work"]
+        pending_total_count = accounting["pending_total_count"]
+        processed_or_resolved_count = accounting["processed_or_resolved_queue_records"]
+        repeated_count = accounting["repeated_queue_discovery_count"]
 
-        pending_block_addrs = set()
-        pending_function_addrs = set()
-        status_counts = {}
-        for key, q in unique_queue_records.items():
-            st = queue_status(q)
-            status_counts[st] = status_counts.get(st, 0) + 1
-            if st == "pending_budget_exhaustion":
-                tgt = q.get("target", q.get("address"))
-                if tgt is not None:
-                    if q["work_type"] == "block":
-                        pending_block_addrs.add(tgt)
-                    elif q["work_type"] == "function":
-                        pending_function_addrs.add(tgt)
+        # Fail-loud reconciliation before any output replacement (Task 4).
+        reconcile_queue_accounting(accounting)
 
-        pending_total_addrs = pending_block_addrs | pending_function_addrs
-        processed_or_resolved_count = sum(v for k, v in status_counts.items() if k not in ("pending_budget_exhaustion",))
-
-        status_count_sum = sum(status_counts.values())
-        if status_count_sum != len(unique_queue_records):
-            raise SystemExit(
-                f"CONSISTENCY FAILURE: queue status counts {status_counts} sum to {status_count_sum} "
-                f"but unique queue records total {len(unique_queue_records)}"
-            )
+        # Candidate-vs-queue metrics (Task 5).
+        candidate_queue = candidate_queue_metrics(self, accounting)
 
         return {
             "summary": {
@@ -1096,33 +1398,27 @@ class CFGBuilder:
                 "block_termination_counts": dict(term_counts),
                 "traversal_stop_counts": stop_counts,
                 "budget_exhaustion_observations": self.budget_exhaustion_observations,
-                "queue_discovery_records": [
-                    {
-                        "target": hex(q.get("target")) if q.get("target") is not None else None,
-                        "call_addr": hex(q.get("call_addr")) if q.get("call_addr") is not None else None,
-                        "depth": q["depth"],
-                        "work_type": q["work_type"],
-                        "reason": q["reason"],
-                        "final_status": queue_status(q),
-                    }
-                    for key, q in unique_queue_records.items()
-                ],
-                "queue_discovery_record_count": len(unique_queue_records),
-                "queue_final_status_counts": status_counts,
+                "queue_discovery_records": queue_records,
+                "queue_discovery_record_count": len(queue_records),
+                "queue_final_status_counts": queue_status_counts,
                 "repeated_queue_discovery_count": repeated_count,
-                "pending_block_work": [
-                    hex(a) for a in sorted(pending_block_addrs)
-                ],
-                "pending_block_count": len(pending_block_addrs),
-                "pending_function_work": [
-                    hex(a) for a in sorted(pending_function_addrs)
-                ],
-                "pending_function_count": len(pending_function_addrs),
-                "pending_total_work": [
-                    hex(a) for a in sorted(pending_total_addrs)
-                ],
-                "pending_total_count": len(pending_total_addrs),
+                "pending_block_work": pending_block_work,
+                "pending_block_count": pending_block_count,
+                "pending_function_work": pending_function_work,
+                "pending_function_count": pending_function_count,
+                "pending_total_work": pending_total_work,
+                "pending_total_count": pending_total_count,
                 "processed_or_resolved_queue_records": processed_or_resolved_count,
+                # Candidate-vs-queue metrics (Task 5).
+                "queued_candidates_scheduled_pending": candidate_queue[
+                    "queued_candidates_scheduled_pending"
+                ],
+                "queued_candidates_not_scheduled_depth_limit": candidate_queue[
+                    "queued_candidates_not_scheduled_depth_limit"
+                ],
+                "queued_candidates_without_function_work_record": candidate_queue[
+                    "queued_candidates_without_function_work_record"
+                ],
             },
             "nodes": [
                 {
@@ -1796,6 +2092,46 @@ def canonical_edge_validate(canonical_edges, partition_result, builder):
         )
 
 
+def _build_queue_summary_from_builder(builder):
+    """Build queue accounting fields for build_canonical_summary using the
+    shared helper. Replaces hardcoded queue literals in canonical output
+    (Task 1 / Task 4).
+    """
+    accepted_entry_addrs = set(int(f["start"]) for f in builder.functions.values())
+    node_start_addrs = {n["start"] for n in builder.nodes}
+    rejected_addrs = {
+        int(r["addr"], 16) if isinstance(r.get("addr"), str) else r.get("addr")
+        for r in builder.rejected if r.get("addr") is not None
+    }
+
+    accounting = build_queue_accounting(
+        queued_work=builder.queued_work,
+        accepted_entry_addresses=accepted_entry_addrs,
+        candidate_states={},
+        node_start_addrs=node_start_addrs,
+        rejected_addrs=rejected_addrs,
+        repeated_queue_discovery_count=builder.repeated_queue_discovery_count,
+    )
+
+    reconcile_queue_accounting(accounting)
+
+    return {
+        "queue_discovery_records": accounting["queue_discovery_records"],
+        "queue_discovery_record_count": accounting["queue_discovery_record_count"],
+        "queue_final_status_counts": accounting["queue_final_status_counts"],
+        "repeated_queue_discovery_count": accounting["repeated_queue_discovery_count"],
+        "pending_block_work": accounting["pending_block_work"],
+        "pending_block_count": accounting["pending_block_count"],
+        "pending_function_work": accounting["pending_function_work"],
+        "pending_function_count": accounting["pending_function_count"],
+        "pending_total_work": accounting["pending_total_work"],
+        "pending_total_count": accounting["pending_total_count"],
+        "processed_or_resolved_queue_records": accounting[
+            "processed_or_resolved_queue_records"
+        ],
+    }
+
+
 def build_canonical_summary(builder, observations, partition_result, canonical_nodes, edges,
                             edge_semantic_digest_sha256, cfg_edges_file_sha256,
                             cfg_edges_baseline_file_sha256, cfg_edges_final_file_sha256,
@@ -1942,17 +2278,9 @@ def build_canonical_summary(builder, observations, partition_result, canonical_n
         "edges_baseline_available": edges_baseline_available,
         # Canonical edge metrics (Stage B3)
         "canonical_edge_metrics": canonical_edge_metrics,
-        # Queue accounting carried over from legacy traversal state.
-        "queue_discovery_record_count": len(builder.queued_work),
-        "queue_final_status_counts": {},
-        "repeated_queue_discovery_count": builder.repeated_queue_discovery_count,
-        "pending_block_work": [],
-        "pending_block_count": 0,
-        "pending_function_work": [],
-        "pending_function_count": 0,
-        "pending_total_work": [],
-        "pending_total_count": 0,
-        "processed_or_resolved_queue_records": 0,
+        # Queue accounting carried over from legacy traversal state (shared
+        # helper, Task 1 - replaces hardcoded zero literals).
+        **_build_queue_summary_from_builder(builder),
         # Stage B4: exact byte accounting (computed, never hard-coded).
         "canonical_instruction_word_count": len(partition_result["instructions"]),
         "canonical_instruction_width_bytes": INSTRUCTION_WIDTH_BYTES,
@@ -2286,16 +2614,20 @@ def validate_graph_consistency(canonical_nodes, canonical_edges, canonical_range
             raise CanonicalPartitionError(
                 f"candidate 0x{int(c):08X} marked accepted but not an accepted function"
             )
-
-    # Queue status totals reconcile.
+    # Queue status totals reconcile (fail loud, never skip when empty).
     status_counts = canonical_summary.get("queue_final_status_counts", {})
-    if sum(status_counts.values()) != len(canonical_summary.get("queue_discovery_records", [])):
-        # allow empty when summary carries legacy zeros; check unique records instead
-        unique_records = canonical_summary.get("queue_discovery_record_count", 0)
-        if status_counts and sum(status_counts.values()) != unique_records:
-            raise CanonicalPartitionError(
-                "queue status totals do not reconcile"
-            )
+    unique_records = canonical_summary.get("queue_discovery_record_count", 0)
+    if sum(status_counts.values()) != unique_records:
+        raise CanonicalPartitionError(
+            "queue status totals do not reconcile: "
+            f"sum={sum(status_counts.values())} != record_count={unique_records}"
+        )
+    if len(canonical_summary.get("queue_discovery_records", [])) != unique_records:
+        raise CanonicalPartitionError(
+            "queue record list length does not reconcile: "
+            f"len={len(canonical_summary.get('queue_discovery_records', []))} "
+            f"!= record_count={unique_records}"
+        )
 
     # Every canonical edge ID is unique.
     edge_ids = [rec["canonical_edge_id"] for rec in canonical_edges]
@@ -3296,6 +3628,163 @@ def write_canonical_preview(builder, observations, output_path):
     return preview
 
 
+# ---------------------------------------------------------------------------
+# Comparison generator (Task 6)
+# ---------------------------------------------------------------------------
+
+REQUIRED_COMPARISON_METRIC_FIELDS = (
+    "baseline_json_path",
+    "experiment_json_path",
+    "baseline_value",
+    "experiment_value",
+    "classification",
+)
+
+
+def load_json_file(path):
+    """Load a JSON file, failing loudly if missing or invalid."""
+    p = Path(path)
+    if not p.exists():
+        raise SystemExit(
+            f"COMPARISON GENERATOR FAILURE: required path does not exist: {path}"
+        )
+    try:
+        return json.loads(p.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise SystemExit(
+            f"COMPARISON GENERATOR FAILURE: invalid JSON at {path}: {exc}"
+        )
+
+
+def build_comparison_record(baseline_path, experiment_path, metric_name,
+                            baseline_value, experiment_value, classification):
+    """Build a single deterministic comparison metric record.
+
+    Never uses zero, empty object, or empty array as a silent default for a
+    missing required field. Missing required fields fail loudly. Optional
+    metrics may use null with value_present: false and reason.
+    """
+    if baseline_value is None:
+        raise SystemExit(
+            f"COMPARISON GENERATOR FAILURE: missing required baseline value "
+            f"for metric '{metric_name}'"
+        )
+    if experiment_value is None:
+        raise SystemExit(
+            f"COMPARISON GENERATOR FAILURE: missing required experiment value "
+            f"for metric '{metric_name}'"
+        )
+
+    record = {
+        "metric": metric_name,
+        "baseline_json_path": str(baseline_path),
+        "experiment_json_path": str(experiment_path),
+        "baseline_value": baseline_value,
+        "experiment_value": experiment_value,
+        "classification": classification,
+    }
+
+    if isinstance(baseline_value, (int, float)) and isinstance(
+        experiment_value, (int, float)
+    ):
+        record["delta"] = experiment_value - baseline_value
+    else:
+        record["delta"] = None
+
+    return record
+
+
+def generate_comparison_4096_vs_8192(baseline_summary, experiment_summary,
+                                     baseline_path, experiment_path,
+                                     output_path):
+    """Generate comparison_4096_vs_8192.json with explicit provenance.
+
+    All required fields are present; missing required fields fail loudly.
+    Optional metrics use null with value_present: false and reason.
+    """
+    metrics = []
+
+    def metric(baseline, experiment, name, classifier):
+        bv = baseline.get(name)
+        ev = experiment.get(name)
+        if bv is None or ev is None:
+            raise SystemExit(
+                f"COMPARISON GENERATOR FAILURE: missing required field '{name}' "
+                f"in baseline or experiment summary"
+            )
+        metrics.append(build_comparison_record(
+            baseline_path, experiment_path, name, bv, ev, classifier
+        ))
+
+    # Required canonical graph metrics (fail loud if missing).
+    metric(baseline_summary, experiment_summary, "basic_blocks", "graph_metric")
+    metric(baseline_summary, experiment_summary, "instruction_count", "graph_metric")
+    metric(baseline_summary, experiment_summary, "decoded_byte_count", "graph_metric")
+    metric(baseline_summary, experiment_summary, "unique_accepted_function_count", "graph_metric")
+    metric(baseline_summary, experiment_summary, "unique_candidate_count", "graph_metric")
+    metric(baseline_summary, experiment_summary, "budget_exhaustion_status", "budget_metric")
+    metric(baseline_summary, experiment_summary, "queue_discovery_record_count", "queue_metric")
+    metric(baseline_summary, experiment_summary, "processed_or_resolved_queue_records", "queue_metric")
+    metric(baseline_summary, experiment_summary, "pending_block_count", "queue_metric")
+    metric(baseline_summary, experiment_summary, "pending_function_count", "queue_metric")
+    metric(baseline_summary, experiment_summary, "pending_total_count", "queue_metric")
+
+    # Candidate-vs-queue metrics (optional, may be null).
+    for name in (
+        "queued_candidates_scheduled_pending",
+        "queued_candidates_not_scheduled_depth_limit",
+        "queued_candidates_without_function_work_record",
+    ):
+        bv = baseline_summary.get(name)
+        ev = experiment_summary.get(name)
+        if bv is None or ev is None:
+            metrics.append({
+                "metric": name,
+                "baseline_json_path": str(baseline_path),
+                "experiment_json_path": str(experiment_path),
+                "baseline_value": None,
+                "experiment_value": None,
+                "delta": None,
+                "classification": "optional_metric",
+                "value_present": False,
+                "reason": "metric not present in one or both summaries",
+            })
+        else:
+            metrics.append(build_comparison_record(
+                baseline_path, experiment_path, name, bv, ev, "queue_metric"
+            ))
+
+    comparison = {
+        "schema_version": CFG_SCHEMA_VERSION,
+        "generator": "scripts/research/hfd_cfg.py generate_comparison_4096_vs_8192",
+        "baseline_json_path": str(baseline_path),
+        "experiment_json_path": str(experiment_path),
+        "metrics": metrics,
+    }
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(
+        json.dumps(comparison, indent=2, sort_keys=True), encoding="utf-8"
+    )
+    return comparison
+
+
+def cli_compare(args):
+    """CLI comparison mode: generate comparison_4096_vs_8192.json."""
+    baseline_path = Path(args.compare_baseline_json)
+    experiment_path = Path(args.compare_experiment_json)
+    output_path = Path(args.compare_output)
+
+    baseline_summary = load_json_file(baseline_path)
+    experiment_summary = load_json_file(experiment_path)
+
+    comparison = generate_comparison_4096_vs_8192(
+        baseline_summary, experiment_summary,
+        baseline_path, experiment_path, output_path,
+    )
+    print(f"Comparison written to {output_path}")
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Bounded recursive M*Core CFG utility for HFD Code V2.3"
@@ -3334,6 +3823,23 @@ def main():
         action="store_true",
         help="Audit-only mode: bounded traversal in memory, write only cfg_canonical_preview.json, do not touch the five existing CFG outputs.",
     )
+    parser.add_argument(
+        "--experimental-single-root-8192",
+        action="store_true",
+        help="Experimental safety profile: single root 0x60017490, max_instructions 8192, isolated output under local_analysis/cfg_experiments/.",
+    )
+    parser.add_argument(
+        "--compare-baseline-json",
+        help="Path to baseline cfg_summary.json for comparison generation.",
+    )
+    parser.add_argument(
+        "--compare-experiment-json",
+        help="Path to experiment cfg_summary.json for comparison generation.",
+    )
+    parser.add_argument(
+        "--compare-output",
+        help="Output path for the generated comparison JSON.",
+    )
     args = parser.parse_args()
 
     input_path = Path(args.input)
@@ -3366,12 +3872,40 @@ def main():
             print(f"ERROR: root 0x{r:X} in prohibited range", file=sys.stderr)
             return 1
 
-    budgets = {key: getattr(args, key) for key in DEFAULT_BUDGETS}
-    # Enforce safety bounds: CLI cannot exceed defaults
-    for key, default in DEFAULT_BUDGETS.items():
-        if budgets[key] > default:
-            print(f"WARNING: {key} {budgets[key]} exceeds safety bound {default}; clamping to {default}", file=sys.stderr)
-            budgets[key] = default
+    output_dir = Path(args.output_dir)
+
+    # Comparison generator mode (Task 6): deterministic comparison of two
+    # existing cfg_summary.json files. No firmware traversal is performed.
+    if args.compare_baseline_json or args.compare_experiment_json or args.compare_output:
+        if not (args.compare_baseline_json and args.compare_experiment_json and args.compare_output):
+            print("ERROR: comparison mode requires --compare-baseline-json, "
+                  "--compare-experiment-json, and --compare-output", file=sys.stderr)
+            return 1
+        return cli_compare(args)
+
+    requested_budgets = {key: getattr(args, key) for key in DEFAULT_BUDGETS}
+
+    # Preflight validation of the experimental safety profile. Fails loudly
+    # before traversal if any requirement is violated.
+    profile = validate_budget_profile(args, requested_budgets, roots, output_dir)
+
+    budgets = dict(requested_budgets)
+    if profile["experimental_profile_enabled"]:
+        # Effective budgets: only max_instructions changes (to 8192); all others
+        # stay at defaults. No clamping of max_instructions for this profile.
+        budgets = dict(profile["effective_budgets"])
+        for key, default in DEFAULT_BUDGETS.items():
+            if key == "max_instructions":
+                continue
+            if budgets[key] != default:
+                print(f"ERROR: {key} changed from default {default} for experimental profile", file=sys.stderr)
+                return 1
+    else:
+        # Enforce safety bounds: CLI cannot exceed defaults
+        for key, default in DEFAULT_BUDGETS.items():
+            if budgets[key] > default:
+                print(f"WARNING: {key} {budgets[key]} exceeds safety bound {default}; clamping to {default}", file=sys.stderr)
+                budgets[key] = default
 
     mcdis_mod = load_mcdis()
     builder = CFGBuilder(data, args.base, roots, budgets, mcdis_mod)
@@ -3389,7 +3923,6 @@ def main():
         print(f"Canonical preview written to {preview_path}")
         return 0
 
-    output_dir = Path(args.output_dir)
     edges_content = json.dumps(output["edges"], indent=2).encode("utf-8")
     edge_semantic_digest_sha256 = hashlib.sha256(edges_content).hexdigest().upper()
 
@@ -3471,6 +4004,16 @@ def main():
         canonical_edge_records, canonical_edge_metrics,
         legacy_edge_count, legacy_dup_groups,
     )
+
+    # Attach safety-profile reporting fields to summary, report, and manifest.
+    canonical_summary["safety_profile"] = profile["safety_profile"]
+    canonical_summary["experimental_profile_enabled"] = profile["experimental_profile_enabled"]
+    canonical_summary["experimental_profile_name"] = profile["experimental_profile_name"]
+    canonical_summary["requested_budgets"] = profile["requested_budgets"]
+    canonical_summary["effective_budgets"] = profile["effective_budgets"]
+    canonical_summary["default_budgets_unchanged"] = profile["default_budgets_unchanged"]
+    canonical_summary["root_constraint_enforced"] = profile["root_constraint_enforced"]
+    canonical_summary["experiment_output_isolated"] = profile["experiment_output_isolated"]
 
     # Consistency validation before any output is replaced.
     source_union = set(observations["instruction_observations"].keys())
@@ -3623,6 +4166,14 @@ def main():
         canonical_summary.get("budget_increase_recommendation"),
         canonical_summary.get("multi_root_expansion_recommendation"),
     )
+    manifest["safety_profile"] = profile["safety_profile"]
+    manifest["experimental_profile_enabled"] = profile["experimental_profile_enabled"]
+    manifest["experimental_profile_name"] = profile["experimental_profile_name"]
+    manifest["requested_budgets"] = profile["requested_budgets"]
+    manifest["effective_budgets"] = profile["effective_budgets"]
+    manifest["default_budgets_unchanged"] = profile["default_budgets_unchanged"]
+    manifest["root_constraint_enforced"] = profile["root_constraint_enforced"]
+    manifest["experiment_output_isolated"] = profile["experiment_output_isolated"]
     manifest["output_file_names_and_sha256"] = pre_manifest_hashes
     manifest["reproducibility_manifest_hash_self_excluded"] = True
     manifest_bytes = json.dumps(manifest, indent=2).encode("utf-8")
