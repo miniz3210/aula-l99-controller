@@ -62,6 +62,50 @@
 - 2060-byte packets NOT claimed as proof of live framebuffer refresh
 - No research tools altered; no commits/tags/pushes/version bump
 
+### Companion offline integration (documentation sync)
+
+#### Added
+- Synchronized README.md, CHANGELOG.md, and docs/PROJECT_HANDOVER.md with the Companion offline integration audit (documentation only; no source/firmware changes).
+- New untracked companion modules: `src/aula_bridge/companion_button_mapping.py`, `src/aula_bridge/companion_dispatch_adapter.py`, `src/aula_bridge/companion_http_transport.py`, `src/aula_bridge/companion_http_sender.py`, `src/aula_bridge/companion_transport.py`, `src/aula_bridge/companion_types.py`.
+- New untracked test files: `tests/test_companion_button_mapping.py`, `tests/test_companion_dispatch_adapter.py`, `tests/test_companion_dispatcher_integration.py`, `tests/test_companion_http_transport.py`, `tests/test_companion_http_sender.py`, `tests/test_companion_offline_e2e.py`, `tests/test_mock_companion_transport.py`.
+
+#### Verified safety properties
+- Short-press-only behavior: only `short_press` events processed; hold/secondary_hold/key_down/key_up/repeat_ignored ignored (zero HTTP requests).
+- Hold and secondary_hold suppression: all hold-type events produce zero HTTP requests.
+- Device identity preservation: `ProviderEvent.device` never mutated; logged in INFO logs; included in transport metadata.
+- Event sequence preservation: `ProviderEvent.seq` never mutated; dispatch order preserved through mock transport.
+- HTTP response logging: key, device, seq, event, status_code, success, error_code logged; status codes mapped to semantic error codes.
+- HTTP failure handling: all non-200 responses produce `HttpResponse(success=False)`; no exceptions propagate.
+- No default button mappings: explicit mapping file required; no automatic locations invented.
+- Strict JSON validation: duplicate keys rejected; version must be integer (version 1 only); location fields must be genuine integers; negative values rejected; unknown keys rejected; extra fields rejected; missing required fields rejected.
+- No automatic retries: exactly one sender call per press; redirects rejected.
+- No event buffering: each `send()` processes exactly one event; `flush()`/`close()` are no-ops.
+- No background threads: all calls synchronous; no threading/asyncio/concurrent.futures.
+- No accidental live network activation: all tests use fake/mock senders; loopback-only validation; `http://` scheme only.
+- No firmware/hardware access: zero imports of serial/usb/hid; pure Python; dependency injection.
+- No modification of accepted Bridge behavior: ActionDispatcher, ProviderEvent, DryRunProvider unchanged.
+- HTTP sender security: redirect rejection, scheme validation (http:// only), userinfo rejection, path/query/fragment restriction, loopback-only restriction — all verified.
+
+#### Remaining risks (not resolved)
+- No integration test with real Companion instance (UNKNOWN — all tests use fakes).
+- Button mapping file not hot-reloadable (INFERENCE — loaded once at startup).
+- No authentication support (INFERENCE — Companion may require auth token).
+- Single-threaded synchronous HTTP (INFERENCE — blocking I/O; timeout mitigates).
+- No health check / connection verification (INFERENCE — no pre-flight reachability check).
+- Error codes not mapped to user actions (INFERENCE — logs errors but no retry/backoff/alerting).
+- No encryption (HTTP only) (VERIFIED — http:// only; loopback mitigates).
+- Fixed 5s default timeout (INFERENCE).
+- No circuit breaker (INFERENCE — repeated failures don't pause dispatch).
+
+#### Acceptance recommendation
+- **ACCEPT** — Companion integration is safe for offline development and testing.
+- Not yet suitable for production deployment with live Companion.
+
+#### Verified
+- Repository state at sync: HEAD `65d071981ddc132758cf0dd4d11ad34735990856`, branch `main`, working tree clean for tracked files (untracked companion modules present).
+- `python -m pytest tests -q` passes for repo test suite (797 passed, 47 subtests passed).
+- `git diff --check` clean.
+
 ### JMPI evidence research checkpoint (documentation sync)
 
 #### Added

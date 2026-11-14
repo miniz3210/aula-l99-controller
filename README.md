@@ -409,6 +409,66 @@ evidence from accepted offline research checkpoints. Includes:
 
 Acceptance: **ACCEPTED** — documentation sync checkpoint.
 
+## Companion Integration (offline development only)
+
+Bitfocus Companion is the preferred first external platform for the AULA L99 input bridge. The offline Companion integration (input-only integration) maps existing Mini Numpad HID events to Companion button press actions through a local bridge. It does not require firmware modification, flashing, or any hardware access.
+
+### Scope and readiness
+
+- Safe for offline development and testing: unit/integration tests, dry-run development with DryRunProvider, mock transport validation, and mapping configuration validation.
+- Not yet suitable for production deployment with live Companion, unattended operation without monitoring, or networks where loopback isolation is insufficient.
+- No claim of production readiness is made. Production use requires authentication support (if Companion requires it), a health check endpoint before dispatch, a circuit breaker for repeated failures, HTTPS consideration for defense-in-depth, and a live integration test with real Companion 5.2.0+.
+
+### Companion modules (untracked, new since baseline)
+
+| Module | Purpose |
+|--------|---------|
+| `src/aula_bridge/companion_types.py` | Shared `ButtonLocation` frozen dataclass (page, row, column). |
+| `src/aula_bridge/companion_button_mapping.py` | Strict JSON mapping loader: logical numpad key → `ButtonLocation`. No network, no hardware access. |
+| `src/aula_bridge/companion_http_transport.py` | HTTP transport core for Companion 5.2.0 press API. Dependency-injected sender. No retries, no buffering, no background threads. |
+| `src/aula_bridge/companion_http_sender.py` | Security-hardened `urllib` sender. HTTP POST only, loopback-only (`127.0.0.1`), `http://` scheme only, no redirects, no credentials, no proxy. |
+| `src/aula_bridge/companion_transport.py` | `MockCompanionTransport` for offline testing. Records dispatched requests in order. No network I/O. |
+
+### Verified safety properties
+
+- **Short-press only:** `CompanionDispatchAdapter` processes only `short_press` events; `hold`, `secondary_hold`, `key_down`, `key_up`, `repeat_ignored` are ignored (zero HTTP requests).
+- **Hold suppression:** All hold-type events produce zero HTTP requests; no command or payload reaches the transport.
+- **Device identity preserved:** `ProviderEvent.device` is never mutated; logged in INFO logs and included in transport metadata.
+- **Event sequence preserved:** `ProviderEvent.seq` never mutated (frozen dataclass); events dispatched in call order; order preserved through mock transport.
+- **HTTP response logging:** Adapter logs key, device, seq, event, status_code, success, error_code; all status codes mapped to semantic error codes (200→success, 204→NO_CONTROL, 400→INVALID_LOCATION, 403→FORBIDDEN, 4xx→CLIENT_ERROR, 5xx→SERVER_ERROR, others→UNEXPECTED_STATUS).
+- **HTTP failure handling:** All non-200 responses produce `HttpResponse(success=False)`; no exceptions propagate; all error paths caught and converted.
+- **No default button mappings:** `load_companion_button_mapping` requires an explicit mapping file; empty mappings return an empty `MappingProxyType`; no automatic/default locations invented.
+- **Strict JSON validation:** Duplicate JSON keys rejected; version must be integer (version 1 only); all location fields (page, row, column) must be genuine integers (bool/float/string rejected); negative values rejected; unknown logical keys rejected; extra fields rejected; missing required fields rejected; top-level JSON must be object; mappings must be object.
+- **No automatic retries:** Transport makes exactly one call to sender; sender makes exactly one `opener.open()` call; redirects rejected (`_NoRedirectHandler` returns `None` for all redirect codes).
+- **No event buffering:** Each `send()` processes exactly one event; `flush()` and `close()` are no-ops; no internal queues or buffers.
+- **No background threads:** All calls synchronous; `press()` returns only after sender completes; no threading, asyncio, or `concurrent.futures`.
+- **No accidental live network activation:** All tests use fake/mock senders; sender validates host is loopback before any connection; non-loopback hosts rejected; only `http://` scheme allowed (`https://`, `ftp://`, `file://`, `ws://` rejected).
+- **No firmware/hardware access:** Zero imports of `serial`, `usb`, `hid`, or hardware libraries; pure Python with dependency injection; transport protocol is abstract interface with no I/O.
+- **No modification of accepted Bridge behavior:** `ActionDispatcher`, `ProviderEvent`, and `DryRunProvider` unchanged; companion adapter implements the `Transport` protocol.
+- **No hidden port dependency:** Host and port required explicitly in constructor (defaults `127.0.0.1:8000` but overridable); E2E tests use explicit port (never assume 5000 or 8000).
+
+### HTTP Sender Security (verified)
+
+- **Redirect rejection:** `_NoRedirectHandler.redirect_request` returns `None` for all redirect codes (301, 302, 303, 307, 308); no follow-up requests.
+- **Scheme validation:** Only `http://` permitted; `https://`, `ftp://`, `file://`, `ws://` rejected as `INVALID_URL`.
+- **Userinfo rejection:** Username/password in URL rejected; credentials never appear in error messages.
+- **Path/query/fragment restriction:** Fragment (`#section`) and query parameters (`?foo=bar`) rejected; path must match `^/api/location/(\d+)/(\d+)/(\d+)/press$`; wrong path or missing `/press` suffix rejected.
+- **Loopback-only restriction:** Sender validates host is loopback via `ipaddress.ip_address().is_loopback`; `127.0.0.1` allowed; `localhost` rejected (not numeric IP); remote IPs and domains rejected.
+
+### Remaining risks (not resolved)
+
+| Risk | Classification | Details |
+|------|----------------|---------|
+| No integration test with real Companion instance | UNKNOWN | All tests use fakes; real API behavior (rate limits, auth, schema changes) untested |
+| Button mapping file not hot-reloadable | INFERENCE | Mapping loaded once at startup; file changes require restart |
+| No authentication support | INFERENCE | Companion HTTP API may require auth token; not implemented |
+| Single-threaded synchronous HTTP | INFERENCE | Blocking I/O; could stall bridge if Companion unresponsive (timeout mitigates) |
+| No health check / connection verification | INFERENCE | No pre-flight check that Companion is reachable before dispatch |
+| Error codes not mapped to user actions | INFERENCE | Logs errors but no retry/backoff/alerting strategy defined |
+| No encryption (HTTP only) | VERIFIED | `http://` only; loopback mitigates but not defense-in-depth |
+| Fixed 5s default timeout | INFERENCE | May be too short for slow networks / loaded Companion |
+| No circuit breaker | INFERENCE | Repeated failures don't pause dispatch; could log spam |
+
 ## Attribution
 
 - softce/aula-l99-research for the verified factory reset extraction offsets, hash-locked extractor, UI parser, page/resource research, and demonstrated custom UI approach.

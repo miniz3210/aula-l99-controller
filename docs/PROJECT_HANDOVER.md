@@ -377,6 +377,70 @@ Chinese AULA software 1.0.1.4 remains the research baseline.
 - Offline Action Dispatcher
 - Pending Bridge integration
 
+## 23a. Companion offline integration (accepted for offline development only)
+
+Bitfocus Companion is the preferred first external platform for the AULA L99 input bridge. The offline Companion integration (input-only integration) maps existing Mini Numpad HID events to Companion button press actions through a local bridge. It does not require firmware modification, flashing, or any hardware access.
+
+### Scope and readiness
+
+- Safe for offline development and testing: unit/integration tests, dry-run development with DryRunProvider, mock transport validation, and mapping configuration validation.
+- Not yet suitable for production deployment with live Companion, unattended operation without monitoring, or networks where loopback isolation is insufficient.
+- No claim of production readiness is made.
+
+### Companion modules (untracked, new since baseline)
+
+| Module | Purpose |
+|--------|---------|
+| `src/aula_bridge/companion_types.py` | Shared `ButtonLocation` frozen dataclass (page, row, column). |
+| `src/aula_bridge/companion_button_mapping.py` | Strict JSON mapping loader: logical numpad key → `ButtonLocation`. No network, no hardware access. |
+| `src/aula_bridge/companion_dispatch_adapter.py` | Adapter connecting ActionDispatcher to Companion HTTP Core. Processes only `short_press` events. |
+| `src/aula_bridge/companion_http_transport.py` | HTTP transport core for Companion 5.2.0 press API. Dependency-injected sender. No retries, no buffering, no background threads. |
+| `src/aula_bridge/companion_http_sender.py` | Security-hardened `urllib` sender. HTTP POST only, loopback-only (`127.0.0.1`), `http://` scheme only, no redirects, no credentials, no proxy. |
+| `src/aula_bridge/companion_transport.py` | `MockCompanionTransport` for offline testing. Records dispatched requests in order. No network I/O. |
+
+### Verified safety properties
+
+- Short-press-only: adapter processes only `short_press` events; `hold`, `secondary_hold`, `key_down`, `key_up`, `repeat_ignored` ignored (zero HTTP requests).
+- Hold suppression: all hold-type events produce zero HTTP requests; no command/payload reaches transport.
+- Device identity preserved: `ProviderEvent.device` never mutated; logged in INFO logs; included in transport metadata.
+- Event sequence preserved: `ProviderEvent.seq` never mutated (frozen dataclass); dispatch order preserved through mock transport.
+- HTTP response logging: adapter logs key, device, seq, event, status_code, success, error_code; status codes mapped to semantic error codes.
+- HTTP failure handling: all non-200 responses produce `HttpResponse(success=False)`; no exceptions propagate.
+- No default button mappings: explicit mapping file required; empty mappings return empty `MappingProxyType`.
+- Strict JSON validation: duplicate keys rejected; version integer (version 1 only); location fields genuine integers; negative values rejected; unknown keys rejected; extra fields rejected; missing required fields rejected.
+- No automatic retries: exactly one sender call per press; redirects rejected.
+- No event buffering: each `send()` processes exactly one event; `flush()`/`close()` are no-ops.
+- No background threads: all calls synchronous; no threading/asyncio/concurrent.futures.
+- No accidental live network activation: all tests use fake/mock senders; loopback-only validation; `http://` scheme only.
+- No firmware/hardware access: zero imports of serial/usb/hid; pure Python; dependency injection.
+- No modification of accepted Bridge behavior: ActionDispatcher, ProviderEvent, DryRunProvider unchanged.
+- No hidden port dependency: host and port explicit in constructor (defaults `127.0.0.1:8000`, overridable).
+
+### HTTP Sender Security (verified)
+
+- Redirect rejection: `_NoRedirectHandler` returns `None` for all redirect codes (301, 302, 303, 307, 308).
+- Scheme validation: only `http://` permitted; `https://`, `ftp://`, `file://`, `ws://` rejected.
+- Userinfo rejection: username/password in URL rejected; credentials never in error messages.
+- Path/query/fragment restriction: fragment and query parameters rejected; path must match `^/api/location/(\d+)/(\d+)/(\d+)/press$`.
+- Loopback-only restriction: host validated via `ipaddress.ip_address().is_loopback`; `127.0.0.1` allowed; `localhost` rejected.
+
+### Remaining risks
+
+- No integration test with real Companion instance (UNKNOWN — all tests use fakes).
+- Button mapping file not hot-reloadable (INFERENCE).
+- No authentication support (INFERENCE).
+- Single-threaded synchronous HTTP (INFERENCE).
+- No health check / connection verification (INFERENCE).
+- Error codes not mapped to user actions (INFERENCE).
+- No encryption (HTTP only) (VERIFIED).
+- Fixed 5s default timeout (INFERENCE).
+- No circuit breaker (INFERENCE).
+
+### Acceptance recommendation
+
+- **ACCEPT** — Companion integration is safe for offline development and testing.
+- Not yet suitable for production deployment with live Companion.
+
 ## 24. Current session responsibilities
 
 Session A: Nemotron 3.5 Super VL
