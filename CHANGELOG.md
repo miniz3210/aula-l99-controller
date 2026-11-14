@@ -2,7 +2,39 @@
 
 ## Unreleased
 
-### Added
+### JMPI evidence research checkpoint (documentation sync)
+
+#### Added
+- Synchronized README, CHANGELOG, and PROJECT_HANDOVER with the accepted JMPI evidence research checkpoint (documentation only; no source/firmware changes).
+- Recorded accepted implementation commits:
+  - `89ca1201ec8ff94497df7d8be68f260b9ff87b58` — `research: add validated MCore literal pool helper` (`scripts/research/mcore_literal_pool.py`, `tests/test_mcore_literal_pool.py`).
+  - `8b0b47a51db719721d36bb029de4a4dec7011fd6` — `research: add deterministic JMPI evidence postprocessor` (`scripts/research/jmpi_evidence_postprocess.py`, `tests/test_jmpi_evidence_postprocess.py`).
+- Recorded deterministic JMPI literal-pool evidence artifact: `local_analysis/cfg_experiments/jmpi_evidence_postprocess/jmpi_literal_pool_evidence.json`, SHA-256 `B4D4D323E8B948F1D87D6DB008A016049B6C2D728CA78B595A2D14DC903C1AA3` (verified against artifact).
+- Recorded ROM jump-table research findings (static evidence): indirect jump site `0x6004D68A`, ROM table base `0x60016458`, 11 candidate entries (index 0–10), common join `0x6004D742`; all 11 cases write a 32-bit constant to `0x0086EF40`; default path writes `0x0001C200`. ISA semantics remain decoder-dependent.
+- Recorded cleanup: legacy traversal-integrated JMPI implementation retired; backup patch `C:\temp\aula-l99-jmpi-legacy-backup.patch` SHA-256 `01CA8DD905211502A77FC4620B1BDEF411253AFB9FDB6E01E31F427BB08F659F`.
+
+#### Verified
+- Repository state at sync: HEAD `8b0b47a51db719721d36bb029de4a4dec7011fd6`, branch `main...origin/main [ahead 2]`, tracked working tree clean, `analyze_pending.py` untracked.
+- `python -m pytest tests -q`: 356 passed in 12.74s (repo `tests/` suite). Full-root `pytest -q` reports collection errors in external `tools/Aula_L99_Linux-main/...` due to missing environment deps/module name collisions outside this repository’s test scope.
+- Standalone JMPI evidence post-processor is independent of CFG traversal; `DEFAULT_BUDGETS` unchanged; no roots added; existing accepted CFG artifacts unchanged.
+- JMPI evidence (artifact-derived): 52 unresolved indirect-flow sites total; 49 validated JMPI literal targets; 3 register-indirect sites preserved (record-level). 15 unique literal targets; 0 invalid literal targets. Deterministic post-processor output. Canonical membership (validated JMPI literal-target records): 23 `BLOCK_START`, 1 `INSIDE_BLOCK`, 25 `NON_CANONICAL`. Distinct record-level vs unique-target counts preserved.
+- `0x0086EF40` cross-reference audit remains incomplete due to agent output-limit interruption; hardware register purpose not claimed.
+
+#### Decision gates
+- Literal-pool helper: ACCEPTED
+- Standalone post-processor: ACCEPTED
+- Legacy integrated JMPI mode: RETIRED
+- CFG budget expansion: HOLD
+- Resolved-edge integration: HOLD
+- Type 3 investigation: HOLD
+- Hardware flashing: NO-GO
+
+#### Next research
+- Bounded `0x0086EF40` cross-reference audit.
+- Screen-control protocol research.
+- Independent ISA verification when needed.
+
+### Added (prior uncommitted notes)
 - Added the constrained experimental single-root 8192 safety profile (`--experimental-single-root-8192`, profile name `experimental_single_root_8192`). Requires exactly one root `0x60017490`, `max_instructions=8192`, all other budgets at `DEFAULT_BUDGETS` defaults (including `max_basic_blocks=512`). Output isolated under `local_analysis/cfg_experiments/`. `DEFAULT_BUDGETS` unchanged.
 - Ran an isolated 8192 experiment that reached `max_basic_blocks` first (binding budget). The experiment expanded canonical coverage: blocks 475→666, instructions 3371→5238, edges 605→869, unique reachable bytes 6742→10476, candidates 66→77, 11 new queued candidates (`0x600221C0`, `0x600225EC`, `0x600235EC`, `0x60027C7C`, `0x6002F6B0`, `0x6002FCA0`, `0x60032B28`, `0x60032DD0`, `0x60034B60`, `0x60034D54`, `0x6004C412`). Accepted functions unchanged at 22. Two runs produced deterministic graph-output hashes.
 - Independent Ubuntu/Ghidra startup verification completed: verified startup literals, two direct-call targets (`0x600174B8→0x60045150`, `0x600174BA→0x600449B0`), self-loop `0x600174BC→0x600174BC`. Ghidra 12.1.4 with ghidra-mcore (commit `2f32468f`, `MCORE:LE:32:default`). Local `mcore_le.cspec` compatibility patch applied (not vendor-confirmed; ABI correctness UNKNOWN).

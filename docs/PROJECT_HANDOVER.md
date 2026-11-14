@@ -1893,4 +1893,74 @@ Read-only static classification of 52 canonical unresolved indirect-flow edges:
 | `cfg_report.txt` | `6B7D4AD14561502B049DF92CC05B24B705178D779EF93FE7A9E6F270723E7ED5` | `6B7D4AD14561502B049DF92CC05B24B705178D779EF93FE7A9E6F270723E7ED5` | yes |
 | `cfg_reproducibility.json` | `36076C84057B21F9A62F2A827A01F99AC0E9F6C4476F58B84563E52BA97DB8B9` | `36076C84057B21F9A62F2A827A01F99AC0E9F6C4476F58B84563E52BA97DB8B9` | yes |
 
+### 34. JMPI evidence research checkpoint (accepted, documentation sync)
+
+**Repository state at checkpoint:** HEAD `8b0b47a51db719721d36bb029de4a4dec7011fd6` (`main...origin/main [ahead 2]`), tracked working tree clean, `analyze_pending.py` untracked. No source/firmware changes in this documentation sync.
+
+#### 34.1 Accepted implementation (verified)
+
+| Component | Commit | Subject | Files |
+|-----------|--------|---------|-------|
+| Literal-pool helper | `89ca1201ec8ff94497df7d8be68f260b9ff87b58` | `research: add validated MCore literal pool helper` | `scripts/research/mcore_literal_pool.py`, `tests/test_mcore_literal_pool.py` |
+| Standalone post-processor | `8b0b47a51db719721d36bb029de4a4dec7011fd6` | `research: add deterministic JMPI evidence postprocessor` | `scripts/research/jmpi_evidence_postprocess.py`, `tests/test_jmpi_evidence_postprocess.py` |
+
+- Standalone post-processor is independent of CFG traversal (reads accepted CFG artifacts/manifest; no CFG traversal integration).
+- `DEFAULT_BUDGETS` unchanged; no roots added.
+- Existing accepted CFG artifacts unchanged.
+
+#### 34.2 JMPI literal-pool evidence (artifact-derived, verified)
+
+- Artifact: `local_analysis/cfg_experiments/jmpi_evidence_postprocess/jmpi_literal_pool_evidence.json`
+- Deterministic evidence SHA-256 (verified): `B4D4D323E8B948F1D87D6DB008A016049B6C2D728CA78B595A2D14DC903C1AA3`
+- 52 unresolved indirect-flow sites (record-level total).
+- 49 validated JMPI literal targets (record-level).
+- 3 register-indirect sites preserved (record-level).
+- 15 unique literal targets.
+- 0 invalid literal targets.
+- Deterministic post-processor output.
+- Canonical membership for validated JMPI literal-target records (49 records): 23 `BLOCK_START`, 1 `INSIDE_BLOCK`, 25 `NON_CANONICAL`. (Artifact-wide membership includes 3 preserved register-indirect records classified `NON_CANONICAL`; record-level and unique-target counts are distinguished.)
+
+#### 34.3 ROM jump-table research (recorded static findings)
+
+- Indirect jump site: `0x6004D68A`
+- ROM table base: `0x60016458`
+- 11 candidate entries, index 0 through 10.
+- Common join: `0x6004D742`
+- All 11 cases write a 32-bit constant to `0x0086EF40`.
+- Default path writes `0x0001C200`.
+- ISA semantics remain decoder-dependent.
+- `0x0086EF40` cross-reference audit remains incomplete due to agent output-limit interruption.
+- Do not claim hardware register purpose for `0x0086EF40`.
+
+#### 34.4 Cleanup
+
+- Legacy traversal-integrated JMPI implementation: RETIRED.
+- Backup patch: `C:\temp\aula-l99-jmpi-legacy-backup.patch`
+- Backup SHA-256 (verified): `01CA8DD905211502A77FC4620B1BDEF411253AFB9FDB6E01E31F427BB08F659F`
+- Accepted CFG profiles remain unchanged.
+- `analyze_pending.py` remains untracked.
+
+#### 34.5 Decision gates
+
+| Gate | Status |
+|------|--------|
+| Literal-pool helper | ACCEPTED |
+| Standalone post-processor | ACCEPTED |
+| Legacy integrated JMPI mode | RETIRED |
+| CFG budget expansion | HOLD |
+| Resolved-edge integration | HOLD |
+| Type 3 investigation | HOLD |
+| Hardware flashing | NO-GO |
+
+#### 34.6 Next research
+
+- Bounded `0x0086EF40` cross-reference audit.
+- Screen-control protocol research.
+- Independent ISA verification when needed.
+
+#### 34.7 Validation
+
+- `python -m pytest tests -q`: 356 passed in 12.74s (repo `tests/` suite). Full-root `pytest -q` reports external `tools/Aula_L99_Linux-main/...` collection issues outside this repository’s test scope.
+- Documentation sync modified only: `README.md`, `CHANGELOG.md`, `docs/PROJECT_HANDOVER.md`.
+
 ## External Research Reconciliation and New-Chat Handover
