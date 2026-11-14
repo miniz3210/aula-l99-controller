@@ -1,4 +1,4 @@
-﻿# AULA L99 Touchscreen Reverse Engineering and Stream Deck Bridge
+# AULA L99 Touchscreen Reverse Engineering and Stream Deck Bridge
 
 Windows-oriented research and tooling for turning the AULA L99 keyboard touchscreen into a Stream Deck-style controller.
 
@@ -23,13 +23,13 @@ This is an active reverse-engineering and prototyping project. The present miles
 - Current hardware-write status remains blocked pending offline patch validation and recovery review.
 
 **Current CFG and JMPI evidence status (2026-11-14)**:
-- HEAD: `8b0b47a51db719721d36bb029de4a4dec7011fd6` (`main...origin/main [ahead 2]`, tracked tree clean; `analyze_pending.py` untracked).
+- HEAD: `13b1ff06d99c837a1c2690ae897f84d27a51db66` (`main...origin/main [ahead 2]`, tracked tree clean; `analyze_pending.py` untracked).
 - Accepted CFG checkpoints remain unchanged: 4096 baseline (`3ec58fd` implementation, `0387967` documentation), accounting repair (`59696c1cac8c597427374af176fef9e2ab6859bd`), 8192/512, 8192/1024, 12288/1024, and 12288/1536 (`9c1204152ad56987250b8d9ad1aaec19f1dedcd7`, `PASS_BUDGET_TRUNCATED`, binding `max_instructions`, reconciliation PASS, deterministic run1==run2). `DEFAULT_BUDGETS` unchanged; no roots added; existing accepted CFG artifacts unchanged.
 - JMPI evidence implementation (committed): literal-pool helper `89ca1201ec8ff94497df7d8be68f260b9ff87b58` (`scripts/research/mcore_literal_pool.py`, `tests/test_mcore_literal_pool.py`); standalone deterministic post-processor `8b0b47a51db719721d36bb029de4a4dec7011fd6` (`scripts/research/jmpi_evidence_postprocess.py`, `tests/test_jmpi_evidence_postprocess.py`), independent of CFG traversal.
 - JMPI literal-pool evidence (artifact `local_analysis/cfg_experiments/jmpi_evidence_postprocess/jmpi_literal_pool_evidence.json`, SHA-256 verified `B4D4D323E8B948F1D87D6DB008A016049B6C2D728CA78B595A2D14DC903C1AA3`): 52 unresolved indirect-flow sites; 49 validated JMPI literal targets; 3 register-indirect sites preserved; 15 unique literal targets; 0 invalid literal targets; deterministic output. Canonical membership for validated literal-target records: 23 `BLOCK_START`, 1 `INSIDE_BLOCK`, 25 `NON_CANONICAL` (record-level vs unique-target counts distinguished).
 - ROM jump-table research (recorded): indirect jump site `0x6004D68A`, ROM table base `0x60016458`, 11 candidate entries (index 0–10), common join `0x6004D742`; all 11 cases write a 32-bit constant to `0x0086EF40`; default path writes `0x0001C200`. ISA semantics decoder-dependent. `0x0086EF40` cross-reference audit incomplete (output-limit interruption); hardware register purpose not claimed.
 - Cleanup: legacy traversal-integrated JMPI mode RETIRED; backup `C:\temp\aula-l99-jmpi-legacy-backup.patch` SHA-256 `01CA8DD905211502A77FC4620B1BDEF411253AFB9FDB6E01E31F427BB08F659F`.
-- Tests: `python -m pytest tests -q` → 356 passed (12.74s). Full-root `pytest -q` has external `tools/Aula_L99_Linux-main/...` collection issues outside repo test scope.
+- Historical JMPI checkpoint tests: `python -m pytest tests -q` → 356 passed (12.74s). Full-root `pytest -q` has external `tools/Aula_L99_Linux-main/...` collection issues outside repo test scope.
 - Decision gates: Literal-pool helper ACCEPTED; Standalone post-processor ACCEPTED; Legacy integrated JMPI mode RETIRED; CFG budget expansion HOLD; Resolved-edge integration HOLD; Type 3 investigation HOLD; Hardware flashing NO-GO.
 - Next research: bounded `0x0086EF40` cross-reference audit; screen-control protocol research; independent ISA verification when needed.
 - Generated experiment artifacts remain ignored local files under `local_analysis/cfg_experiments/`. Ubuntu/Ghidra remains an independent verification environment.
@@ -227,6 +227,26 @@ Direct descriptor mode:
 
 See `tests/test_inspect_l99_descriptor.py` for synthetic-test coverage (no vendor firmware embedded).
 
+## Tooling: Address Xref Scanner
+
+`scripts/research/hfd_address_xrefs.py` is a bounded deterministic offline scanner for references
+to a target address (default `0x0086EF40`) in `HFD_Code_V2.3.bin`. It performs raw byte-pattern
+scanning for the little-endian 32-bit representation and bounded local instruction-context
+inspection of the immediate 2-byte instruction word. It does NOT perform recursive disassembly,
+CFG traversal, or instruction validation. Raw byte-pattern matches are clearly distinguished from
+verified instruction references.
+
+Usage:
+
+    python scripts/research/hfd_address_xrefs.py
+
+Output includes firmware verification (size and SHA-256), raw match list with file offsets and
+image addresses, and local instruction-kind classification (`jmpi`, `jsri`, `other`, `unaligned`,
+`truncated`). Prohibited range `0x60031198-0x600315D0` is flagged.
+
+Acceptance: **ACCEPT_WITH_LIMITATIONS** — raw byte-pattern scan only; instruction references
+require full CFG validation not performed here.
+
 ## Tooling: offline NumPad icon patcher
 
 `scripts/patch_l99_numpad_icon.py` is an offline-only ARGB4444 encoder and working-copy
@@ -247,6 +267,38 @@ patcher for the Page 21 NumPad 1 icons (descriptors 341 normal, 342 pressed). It
 
 See `tests/test_patch_l99_numpad_icon.py` for synthetic-test coverage (no vendor firmware
 required or embedded).
+
+## Tooling: Offline Runtime Frame Codec
+
+`scripts/research/l99_runtime_frame_codec.py` is a deterministic offline encoder/decoder for
+the documented AULA L99 short runtime USB protocol (frame format `5A A5 | length:u8 | body | CRC16:LE16`).
+It supports read opcode `0x03` (word_address:BE16, word_count:BE16, max 8 words) and write opcode
+`0x10` (word_address:BE16, word_0:BE16...). Address range 0x0000–0xFFFF. CRC16/MODBUS (poly 0xA001,
+init 0xFFFF). No hardware access, no external dependencies. Includes round-trip tests and error cases.
+
+Acceptance: **ACCEPT** — offline implementation complete with deterministic round-trip validation.
+
+## Tooling: Capture Frame Classifier
+
+`scripts/research/l99_capture_frame_classifier.py` is a deterministic offline classifier for
+existing AULA L99 USB capture payloads (CSV exports only). It classifies frames into
+`VALID_RUNTIME`, `INVALID_RUNTIME`, `UNVERIFIED_LARGE_PAYLOAD`, `UNKNOWN`, and
+`CRC_VALID_UNSUPPORTED_OPCODE`. Includes endpoint attribution via capture-local device mapping
+for known captures (e.g., `aula_home_numpad_transition`). Bounded memory, no hardware access.
+
+Acceptance: **ACCEPT_WITH_LIMITATIONS** — operates on existing CSV captures only; no live
+capture capability; device addresses are capture-local and not generalizable.
+
+## Tooling: USB Device Attribution Utility
+
+`scripts/research/l99_usb_device_attribution.py` is a deterministic offline utility that
+extracts capture-local USB device address to VID/PID mappings from existing USB descriptor
+evidence (pcapng via tshark). Verifies capture SHA-256 before processing. Preserves
+capture-local device addresses; does not generalize across captures. Targets device addresses
+6, 13, 15, 16 from `aula_home_numpad_transition.pcapng` (SHA-256 `B4DAD6E1...`).
+
+Acceptance: **ACCEPT_WITH_LIMITATIONS** — requires tshark/Wireshark; capture-local addresses
+only; no live USB access; output is capture-specific.
 
 ## Tooling: bounded canonical M*Core CFG (research, ignored local artifacts)
 
@@ -338,6 +390,24 @@ Local and ignored only: official firmware, captures, dumps, decoded assets, rese
 7. Implement native Win32 overlapped uploader.
 8. Validate recovery and package compatibility.
 9. Only then consider a controlled hardware write.
+
+## Screen-Control Evidence Inventory
+
+`docs/SCREEN_CONTROL_EVIDENCE_INVENTORY.md` — Consolidated inventory of USB-only screen-control
+evidence from accepted offline research checkpoints. Includes:
+
+- Verified USB device interfaces (keyboard HID 0C45:800A, screen CDC EEEF:268A)
+- Verified image upload behavior (154 chunks, 2060-byte packets, not JPEG, flash slots only)
+- Runtime RAM protocol evidence (short runtime frame codec from Levetop reference — **UNVERIFIED on user unit**)
+- Touch event transport (screen Mini Numpad → PC via keyboard HID, return codes 0x0030–0x0040)
+- Runtime display-update limitations (no live framebuffer RAM write verified, no visible LCD update verified)
+- Page-switch evidence status (Page 21 VERIFIED; 0x7000 system switching Levetop reference only)
+- GT911 evidence status (public teardown only — NOT on user's unit)
+- LT168/LT268 identity uncertainty (user's unit unopened, exact silicon UNVERIFIED)
+- Hardware safety restrictions (NO-GO, critical blockers: image-level self-checksum UNKNOWN, UI-only package acceptance STRONG_INFERENCE, interrupted-write recovery UNKNOWN)
+- Open feasibility questions and recommended evidence for next USB-only milestone
+
+Acceptance: **ACCEPTED** — documentation sync checkpoint.
 
 ## Attribution
 

@@ -291,10 +291,123 @@ Win32 uploader:
 ## 14. Known external references
 
 - softce/aula-l99-research — verified factory reset extraction offsets, hash-locked extractor, UI parser, page/resource research, demonstrated custom UI approach.
-- gavindi/Aula_L99_Linux — extensive keyboard and screen protocol research, Linux tools, captures, upload format work; protocol baseline for general photo/GIF/RTC/audio-spectrum work.
+- gavindi/Aula_L99_Linux — extensive keyboard and screen protocol research, Linux tools, captures, and upload format work.
 - mos9527/evbunpack — Enigma Virtual Box extraction used to inspect the official updater container.
 
 Neither third-party tree is committed to this project, and third-party firmware or artwork is not licensed by this repository.
+
+## 15. Research checkpoints documented (2026-11-14)
+
+**Accepted CFG checkpoints remain unchanged:**
+- 4096 baseline (`3ec58fd` implementation, `0387967` documentation)
+- Accounting repair (`59696c1cac8c597427374af176fef9e2ab6859bd`)
+- 8192/512, 8192/1024, 12288/1024, 12288/1536 (`9c1204152ad56987250b8d9ad1aaec19f1dedcd7`, `PASS_BUDGET_TRUNCATED`)
+
+**Accepted JMPI evidence:**
+- Literal-pool helper (`89ca1201ec8ff94497df7d8be68f260b9ff87b58`)
+- Standalone post-processor (`8b0b47a51db719721d36bb029de4a4dec7011fd6`)
+
+**Validated JMPI mappings:** 49 out of 52 unresolved indirect-flow sites validated
+
+**ROM jump-table research:** Indirect jump site `0x6004D68A`, ROM table base `0x60016458`, 11 candidate entries (index 0–10), common join `0x6004D742`; all 11 cases write a 32-bit constant to `0x0086EF40`; default path writes `0x0001C200`
+
+## 16. Offline utilities newly accepted with limitations
+
+**Address Xref Scanner:** `ACCEPT_WITH_LIMITATIONS`
+
+**Runtime Frame Codec:** `ACCEPT`
+
+**Capture Frame Classifier:** `ACCEPT_WITH_LIMITATIONS`
+
+**USB Device Attribution Utility:** `ACCEPT_WITH_LIMITATIONS`
+
+**Screen-Control Evidence Inventory:** `ACCEPTED`
+
+**Screen Capture Evidence Utility:** `ACCEPT` (22/22 tests passed; CSV assertion provenance explicit)
+
+**Offline Touch Event Normalizer:** `ACCEPT`
+
+**Offline Action Dispatcher:** `ACCEPT`
+
+## 17. FSM device attribution repair
+
+`ACCEPT_WITH_LIMITATIONS`
+
+## 18. Pending work (not yet accepted or complete)
+
+- Bridge Dispatcher Integration: `ACCEPT` (MockTransport only; real Companion transport NOT IMPLEMENTED)
+- Bridge end-to-end device attribution: `NOT YET VERIFIED`
+- Real Bitfocus Companion transport: `NOT IMPLEMENTED`
+- USB-only visible LCD update: `NOT VERIFIED`
+
+## 19. Firmware identity preservation
+
+**HFD_Code_V2.3.bin:** 313,652 bytes, SHA-256 A76806ADA9648D2672BBEBEAD8A9BB396C0BC6F3A0A071E22E99001AC3359D03
+
+## 20. Firmware upgrade distinctions
+
+Keyboard firmware upgrade and screen firmware upgrade are separate paths.
+
+Chinese AULA software 1.0.1.4 remains the research baseline.
+
+## 21. Safety gates preserved
+
+**Firmware flashing:** NO-GO
+**Unknown RAM writes:** NO-GO
+**CFG budget expansion:** HOLD
+**Multi-root expansion:** HOLD
+**Type 3 investigation:** HOLD
+**GT911 deeper research:** HOLD
+
+## 22. USB evidence limitations
+
+- Capture-local device addresses
+- VID/PID descriptor evidence
+- CSV mapping assertions
+- CRC-valid unsupported opcodes
+- 2060-byte uploads are not proof of live framebuffer refresh
+
+## 23. Windows Companion progress
+
+- Raw Input device discovery
+- 17-key logical mapping
+- Short/hold/secondary-hold FSM
+- DryRunProvider
+- Offline Touch Event Normalizer
+- Offline Action Dispatcher
+- Pending Bridge integration
+
+## 24. Current session responsibilities
+
+Session A: Nemotron 3.5 Super VL
+Read-only firmware/static audits
+
+Session B: Nemotron 3 Ultra 550B
+Architecture and acceptance audits
+
+Session C: Free Coding Agent
+Implementation and tests
+
+Session D: Free Coding Agent
+Documentation and bounded repairs
+
+## 25. Next planned task
+
+Complete Bridge Dispatcher Integration, independently verify device identity, event ordering, DryRunProvider preservation, and mock dispatch behavior.
+
+Do not mark that task ACCEPTED or COMPLETE until its final report and independent review.
+
+Do not restart firmware discovery.
+
+## 26. Next-chat handover summary
+
+**Research Status:** All accepted checkpoints preserved. CFG and JMPI evidence stable. Offline utilities documented. Safety gates preserved.
+
+**Current status:** Bridge Dispatcher Integration ACCEPTED after independent review. Device propagation verified; real Companion transport NOT IMPLEMENTED.
+
+**Handoff Ready:** Yes - All three allowed documentation files updated, firmware identity preserved, safety constraints maintained.
+
+**Next Steps:** Session D continues documentation and bounded repairs. New chat should continue with Bridge Dispatcher Integration implementation.
 
 ## 15. Resume commands
 
@@ -1894,6 +2007,206 @@ Read-only static classification of 52 canonical unresolved indirect-flow edges:
 | `cfg_reproducibility.json` | `36076C84057B21F9A62F2A827A01F99AC0E9F6C4476F58B84563E52BA97DB8B9` | `36076C84057B21F9A62F2A827A01F99AC0E9F6C4476F58B84563E52BA97DB8B9` | yes |
 
 ### 34. JMPI evidence research checkpoint (accepted, documentation sync)
+
+**Repository state at checkpoint:** HEAD `8b0b47a51db719721d36bb029de4a4dec7011fd6` (`main...origin/main [ahead 2]`), tracked working tree clean, `analyze_pending.py` untracked. No source/firmware changes in this documentation sync.
+
+#### 34.1 Accepted implementation (verified)
+
+| Component | Commit | Subject | Files |
+|-----------|--------|---------|-------|
+| Literal-pool helper | `89ca1201ec8ff94497df7d8be68f260b9ff87b58` | `research: add validated MCore literal pool helper` | `scripts/research/mcore_literal_pool.py`, `tests/test_mcore_literal_pool.py` |
+| Standalone post-processor | `8b0b47a51db719721d36bb029de4a4dec7011fd6` | `research: add deterministic JMPI evidence postprocessor` | `scripts/research/jmpi_evidence_postprocess.py`, `tests/test_jmpi_evidence_postprocess.py` |
+
+- Standalone post-processor is independent of CFG traversal (reads accepted CFG artifacts/manifest; no CFG traversal integration).
+- `DEFAULT_BUDGETS` unchanged; no roots added.
+- Existing accepted CFG artifacts unchanged.
+
+#### 34.2 JMPI literal-pool evidence (artifact-derived, verified)
+
+- Artifact: `local_analysis/cfg_experiments/jmpi_evidence_postprocess/jmpi_literal_pool_evidence.json`
+- Deterministic evidence SHA-256 (verified): `B4D4D323E8B948F1D87D6DB008A016049B6C2D728CA78B595A2D14DC903C1AA3`
+- 52 unresolved indirect-flow sites (record-level total).
+- 49 validated JMPI literal targets (record-level).
+- 3 register-indirect sites preserved (record-level).
+- 15 unique literal targets.
+- 0 invalid literal targets.
+- Deterministic post-processor output.
+- Canonical membership for validated JMPI literal-target records (49 records): 23 `BLOCK_START`, 1 `INSIDE_BLOCK`, 25 `NON_CANONICAL`. (Artifact-wide membership includes 3 preserved register-indirect records classified `NON_CANONICAL`; record-level and unique-target counts are distinguished.)
+
+#### 34.3 ROM jump-table research (recorded static findings)
+
+- Indirect jump site: `0x6004D68A`
+- ROM table base: `0x60016458`
+- 11 candidate entries, index 0 through 10.
+- Common join: `0x6004D742`
+- All 11 cases write a 32-bit constant to `0x0086EF40`.
+- Default path writes `0x0001C200`.
+- ISA semantics remain decoder-dependent.
+- `0x0086EF40` cross-reference audit remains incomplete due to agent output-limit interruption.
+- Do not claim hardware register purpose for `0x0086EF40`.
+
+#### 34.4 Cleanup
+
+- Legacy traversal-integrated JMPI implementation: RETIRED.
+- Backup patch: `C:\temp\aula-l99-jmpi-legacy-backup.patch`
+- Backup SHA-256 (verified): `01CA8DD905211502A77FC4620B1BDEF411253AFB9FDB6E01E31F427BB08F659F`
+- Accepted CFG profiles remain unchanged.
+- `analyze_pending.py` remains untracked.
+
+#### 34.5 Decision gates
+
+| Gate | Status |
+|------|--------|
+| Literal-pool helper | ACCEPTED |
+| Standalone post-processor | ACCEPTED |
+| Legacy integrated JMPI mode | RETIRED |
+| CFG budget expansion | HOLD |
+| Resolved-edge integration | HOLD |
+| Type 3 investigation | HOLD |
+| Hardware flashing | NO-GO |
+
+#### 34.6 Next research
+
+- Bounded `0x0086EF40` cross-reference audit.
+- Screen-control protocol research.
+- Independent ISA verification when needed.
+
+#### 34.7 Validation
+
+- `python -m pytest tests -q`: 356 passed in 12.74s (repo `tests/` suite). Full-root `pytest -q` reports external `tools/Aula_L99_Linux-main/...` collection issues outside this repository's test scope.
+- Documentation sync modified only: `README.md`, `CHANGELOG.md`, `docs/PROJECT_HANDOVER.md`.
+
+### 35. Offline research checkpoints documentation sync (accepted)
+
+**Repository state at sync:** HEAD `13b1ff06d99c837a1c2690ae897f84d27a51db66` (`main`, up to date with `origin/main`). Tracked working tree clean. Staged new files: `docs/SCREEN_CONTROL_EVIDENCE_INVENTORY.md`, `scripts/research/hfd_address_xrefs.py`, `scripts/research/l99_runtime_frame_codec.py`, `scripts/research/l99_capture_frame_classifier.py`, `scripts/research/l99_usb_device_attribution.py`, `tests/test_hfd_address_xrefs.py`, `tests/test_l99_runtime_frame_codec.py`, `tests/test_l99_capture_frame_classifier.py`, `tests/test_l99_usb_device_attribution.py`. Untracked: analysis scripts and outputs.
+
+#### 35.1 Accepted checkpoints
+
+| # | Component | Path | Acceptance | Key Limitation |
+|---|-----------|------|------------|----------------|
+| 1 | Address Xref Scanner | `scripts/research/hfd_address_xrefs.py`, `tests/test_hfd_address_xrefs.py` | ACCEPT_WITH_LIMITATIONS | Raw byte-pattern scan only; instruction references require full CFG validation not performed |
+| 2 | Offline Runtime Frame Codec | `scripts/research/l99_runtime_frame_codec.py`, `tests/test_l99_runtime_frame_codec.py` | ACCEPT | Third-party Levetop protocol reference; **UNVERIFIED on user unit** — no live capture |
+| 3 | Capture Frame Classifier | `scripts/research/l99_capture_frame_classifier.py`, `tests/test_l99_capture_frame_classifier.py` | ACCEPT_WITH_LIMITATIONS | Operates on existing CSV captures only; device addresses capture-local, not generalizable |
+| 4 | USB Device Attribution Utility | `scripts/research/l99_usb_device_attribution.py`, `tests/test_l99_usb_device_attribution.py` | ACCEPT_WITH_LIMITATIONS | Requires tshark; capture-local addresses only; no live USB access; output capture-specific |
+| 5 | Screen-Control Evidence Inventory | `docs/SCREEN_CONTROL_EVIDENCE_INVENTORY.md` | ACCEPTED | Documentation sync only |
+
+#### 35.2 Review pending
+
+| Component | Path | Status |
+|-----------|------|--------|
+| Screen Capture Evidence Utility | `scripts/research/l99_screen_capture_evidence.py`, `tests/test_l99_screen_capture_evidence.py` | ACCEPT — 22/22 tests passed; CSV assertions are not descriptor verification |
+
+#### 35.3 Tool descriptions and paths
+
+**Address Xref Scanner** (`scripts/research/hfd_address_xrefs.py`)
+- Bounded deterministic offline scanner for references to target address `0x0086EF40` in `HFD_Code_V2.3.bin`
+- Raw byte-pattern scan for LE32 `40 EF 86 00` + bounded local instruction-context inspection (immediate 2-byte word)
+- Classifies instruction kind: `jmpi` (0x70xx), `jsri` (0x7Fxx), `other`, `unaligned`, `truncated`
+- Flags prohibited range `0x60031198-0x600315D0`
+- Verifies firmware: size 313652, SHA-256 `A76806ADA9648D2672BBEBEAD8A9BB396C0BC6F3A0A071E22E99001AC3359D03`
+- Image base: `0x60010000`, image end: `0x6005C934`
+- Usage: `python scripts/research/hfd_address_xrefs.py`
+
+**Offline Runtime Frame Codec** (`scripts/research/l99_runtime_frame_codec.py`)
+- Deterministic offline encoder/decoder for AULA L99 short runtime USB protocol
+- Frame format: `5A A5 | length:u8 | body | CRC16:LE16`, length = len(body) + 2
+- Read opcode: `0x03 | word_address:BE16 | word_count:BE16` (max 8 words)
+- Write opcode: `0x10 | word_address:BE16 | word_0:BE16 | word_1:BE16 ...`
+- Address range: 0x0000–0xFFFF (16-bit word indices)
+- CRC16/MODBUS: reflected polynomial 0xA001, init 0xFFFF
+- Includes `encode_read_frame`, `encode_write_frame`, `decode_frame`, `decode_read_body`, `decode_write_body`, round-trip tests
+- No hardware access, no external dependencies
+- Usage: `python scripts/research/l99_runtime_frame_codec.py` (runs offline tests)
+
+**Capture Frame Classifier** (`scripts/research/l99_capture_frame_classifier.py`)
+- Deterministic offline classifier for existing USB capture CSV exports
+- Frame classes: `VALID_RUNTIME`, `INVALID_RUNTIME`, `UNVERIFIED_LARGE_PAYLOAD`, `UNKNOWN`, `CRC_VALID_UNSUPPORTED_OPCODE`
+- Endpoint attribution via capture-local device mapping (`get_endpoint_attribution`)
+- Known capture: `aula_home_numpad_transition` with device mapping:
+  - Device 6: 05E3:0626 (Genesys Logic USB Hub)
+  - Device 13: 1A86:8091 (Touch/pointer)
+  - Device 15: EEEF:268A (Screen CDC) — **VERIFIED_SCREEN**
+  - Device 16: 0C45:800A (Keyboard HID) — **VERIFIED_NON_SCREEN**
+- Bounded memory, no hardware access
+- Usage: `python scripts/research/l99_capture_frame_classifier.py` (expects `capture_analysis/` directory)
+
+**USB Device Attribution Utility** (`scripts/research/l99_usb_device_attribution.py`)
+- Extracts capture-local USB device address → VID/PID from pcapng via tshark
+- Verifies capture SHA-256 before processing: `B4DAD6E13612C615F3A03400BCC9EED8F98F6D02E0B256368B8E82C3C608F5EE`
+- Targets device addresses: 6, 13, 15, 16
+- Preserves capture-local device addresses; does NOT generalize across captures
+- Requires tshark (default `C:\Program Files\Wireshark\tshark.exe`)
+- Default capture: `C:\temp\aula-l99-controller\aula_home_numpad_transition.pcapng`
+- Usage: `python scripts/research/l99_usb_device_attribution.py` (or with `--capture` and `--expected-sha256`)
+
+**Screen-Control Evidence Inventory** (`docs/SCREEN_CONTROL_EVIDENCE_INVENTORY.md`)
+- Consolidated inventory of USB-only screen-control evidence from accepted checkpoints
+- Sections: Verified USB interfaces, Image upload behavior, Runtime RAM protocol, Touch transport, Display-update limitations, Page-switch status, GT911 status, LT168/LT268 uncertainty, Hardware restrictions, Open questions, Next milestone evidence recommendations
+
+#### 35.4 USB capture-local mapping rules
+
+- USB device addresses (e.g., Device 6, 13, 15, 16) are **capture-local** and must NOT be generalized across different captures.
+- The `aula_home_numpad_transition.pcapng` mapping is specific to that capture file (SHA-256 `B4DAD6E13612C615F3A03400BCC9EED8F98F6D02E0B256368B8E82C3C608F5EE`).
+- Device 15 (EEEF:268A) is VERIFIED_SCREEN; Device 16 (0C45:800A) is VERIFIED_NON_SCREEN for this capture only.
+- Device 6 (05E3:0626) and Device 13 (1A86:8091) are attributed as **VERIFIED_NON_SCREEN** endpoints for this capture only.
+- Any new capture requires fresh tshark extraction and verification; do not assume device addresses persist.
+
+#### 35.5 Known SHA-256 evidence (from accepted checkpoints)
+
+| Artifact | SHA-256 | Context |
+|----------|---------|---------|
+| `HFD_Code_V2.3.bin` | `A76806ADA9648D2672BBEBEAD8A9BB396C0BC6F3A0A071E22E99001AC3359D03` | Verified firmware (313652 bytes) |
+| `aula_home_numpad_transition.pcapng` | `B4DAD6E13612C615F3A03400BCC9EED8F98F6D02E0B256368B8E82C3C608F5EE` | USB capture for device attribution |
+| `jmpi_literal_pool_evidence.json` | `B4D4D323E8B948F1D87D6DB008A016049B6C2D728CA78B595A2D14DC903C1AA3` | JMPI evidence artifact |
+| `comparison_4096_vs_8192.json` (repaired) | `92D61DD6CF5E9E965965218B9A7BDB9CCA107DDF1D3C20DAE2849FA7AA318310` | CFG comparison |
+| `comparison_8192_vs_12288.json` | `DFCDD5691CFE0982BF933C9F0558EE3337767514AA160EF6D7C7913AA2C6EC4E` | CFG comparison |
+| `cfg_summary.json` (12288/1536 run1) | `9BBE30E2F10A2FB49A77C76D79E30DB75C872909B1EE637DCA07027CB26AF592` | CFG experiment |
+| `cfg_reproducibility.json` (12288/1536) | `36076C84057B21F9A62F2A827A01F99AC0E9F6C4476F58B84563E52BA97DB8B9` | CFG reproducibility |
+| JMPI legacy backup patch | `01CA8DD905211502A77FC4620B1BDEF411253AFB9FDB6E01E31F427BB08F659F` | Legacy JMPI implementation backup |
+
+#### 35.6 Current session workflow
+
+1. **Documentation sync only** — no source code, firmware, or test modifications
+2. Record current HEAD (`13b1ff06d99c837a1c2690ae897f84d27a51db66`) and Git status before editing
+3. Inspect existing documentation (README.md, CHANGELOG.md, PROJECT_HANDOVER.md)
+4. Add concise tool descriptions to README.md
+5. Add Unreleased CHANGELOG entry for five accepted checkpoints
+6. Update PROJECT_HANDOVER.md with:
+   - Tool paths and acceptance status
+   - Important limitations per checkpoint
+   - USB capture-local mapping rules
+   - Known SHA-256 evidence table
+   - Current session workflow
+   - Next USB-only display-control milestone
+7. Preserve all verified firmware identity, CFG/JMPI checkpoints, hardware NO-GO, runtime LCD UNKNOWN, GT911 HOLD
+8. Do NOT claim opcode 0x64 is verified screen-control command
+9. Do NOT claim 2060-byte packets prove live framebuffer refresh
+10. Do NOT alter existing research tools
+11. Do NOT stage/unstage files, commit, tag, push, or version bump
+12. Validate: `git diff --check`, confirm only three allowed files changed, record SHA-256 before/after
+
+#### 35.7 Next USB-only display-control milestone
+
+**Milestone gate:** USB-only screen control requires **P1** evidence:
+- Live capture of short runtime frames (5A A5) during native widget interaction via USB capture (USBPcap) + screen recording while using official AULA software
+- Verify Type 3 variable addresses & icon-selection formula via HFD Code V2.3 disassembly (bounded CFG) + live RAM read via short runtime protocol
+
+**Repository artifacts to produce:**
+- `screen_runtime_capture.pcapng`, `runtime_frame_log.json`
+- `type3_dispatcher_analysis.md`, `variable_address_map.json`
+
+**P2 evidence (parallel track):**
+- Official L99 ISP V1.23.exe update capture (Procmon + USBPcap per `docs/OFFICIAL_UPDATE_CAPTURE_PLAN.md`)
+- Image-level self-checksum resolution (`scripts/flash_checksum_scanner.py --mode deep` + HFD Code checksum handler analysis)
+- Win32 overlapped I/O uploader for 2060-byte packets (`scripts/replay_captured_screen_win32.py`)
+
+**Critical blockers for GO decision (unchanged):**
+1. Image-level self-checksum in `UartTFT-II_Flash.bin` (UNKNOWN)
+2. Exact UI-only package acceptance by updater (STRONG_INFERENCE only)
+3. Interrupted-write recovery behavior (UNKNOWN)
+4. Live RAM write → visible LCD update path (UNVERIFIED on user unit)
+
+### External Research Reconciliation and New-Chat Handover
 
 **Repository state at checkpoint:** HEAD `8b0b47a51db719721d36bb029de4a4dec7011fd6` (`main...origin/main [ahead 2]`), tracked working tree clean, `analyze_pending.py` untracked. No source/firmware changes in this documentation sync.
 

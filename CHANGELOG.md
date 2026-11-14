@@ -2,6 +2,66 @@
 
 ## Unreleased
 
+### Offline research checkpoints documentation sync
+
+#### Added
+- Synchronized README.md, CHANGELOG.md, and docs/PROJECT_HANDOVER.md with five accepted offline research checkpoints (documentation only; no source/firmware changes).
+
+#### Accepted checkpoints
+1. **Address Xref Scanner** (`scripts/research/hfd_address_xrefs.py`, `tests/test_hfd_address_xrefs.py`) — **ACCEPT_WITH_LIMITATIONS**
+   - Bounded deterministic offline byte-pattern scanner for target address 0x0086EF40 in HFD_Code_V2.3.bin
+   - Raw byte-pattern matches + bounded local instruction-context inspection (immediate 2-byte word)
+   - Does NOT perform recursive disassembly, CFG traversal, or instruction validation
+   - Prohibited range 0x60031198-0x600315D0 flagged
+   - Firmware verification (size 313652, SHA-256 A76806ADA9648D2672BBEBEAD8A9BB396C0BC6F3A0A071E22E99001AC3359D03)
+
+2. **Offline Runtime Frame Codec** (`scripts/research/l99_runtime_frame_codec.py`, `tests/test_l99_runtime_frame_codec.py`) — **ACCEPT**
+   - Deterministic offline encoder/decoder for AULA L99 short runtime USB protocol
+   - Frame format: 5A A5 | length:u8 | body | CRC16:LE16
+   - Read opcode 0x03 (word_address:BE16, word_count:BE16, max 8)
+   - Write opcode 0x10 (word_address:BE16, word_0:BE16...)
+   - Address range 0x0000–0xFFFF, CRC16/MODBUS (poly 0xA001, init 0xFFFF)
+   - Full round-trip tests and error-case coverage; no hardware access
+
+3. **Capture Frame Classifier** (`scripts/research/l99_capture_frame_classifier.py`, `tests/test_l99_capture_frame_classifier.py`) — **ACCEPT_WITH_LIMITATIONS**
+   - Deterministic offline classifier for existing USB capture CSV exports
+   - Frame classes: VALID_RUNTIME, INVALID_RUNTIME, UNVERIFIED_LARGE_PAYLOAD, UNKNOWN, CRC_VALID_UNSUPPORTED_OPCODE
+   - Endpoint attribution via capture-local device mapping (aula_home_numpad_transition.pcapng)
+   - Bounded memory, no hardware access, device addresses capture-local only
+
+4. **USB Device Attribution Utility** (`scripts/research/l99_usb_device_attribution.py`, `tests/test_l99_usb_device_attribution.py`) — **ACCEPT_WITH_LIMITATIONS**
+   - Extracts capture-local USB device address → VID/PID mappings from pcapng via tshark
+   - Verifies capture SHA-256 (B4DAD6E13612C615F3A03400BCC9EED8F98F6D02E0B256368B8E82C3C608F5EE)
+   - Targets device addresses 6, 13, 15, 16; preserves capture-local addresses
+   - Requires tshark; no live USB access; output is capture-specific
+
+5. **Screen-Control Evidence Inventory** (`docs/SCREEN_CONTROL_EVIDENCE_INVENTORY.md`) — **ACCEPTED**
+   - Consolidated inventory of USB-only screen-control evidence from accepted checkpoints
+   - Verified interfaces, upload behavior, runtime protocol (Levetop ref only), touch transport
+   - Display-update limitations (no live framebuffer verified), page-switch status, GT911 status
+   - Hardware NO-GO with critical blockers; open questions; next milestone evidence recommendations
+
+#### Important
+- **Screen Capture Evidence Utility** (`scripts/research/l99_screen_capture_evidence.py`, `tests/test_l99_screen_capture_evidence.py`) — **REVIEW_PENDING**
+  - Do NOT mark as ACCEPTED; review pending
+
+#### Verified
+- Repository state at sync: HEAD `13b1ff06d99c837a1c2690ae897f84d27a51db66`, branch `main`, working tree clean for tracked files
+- New files staged: `docs/SCREEN_CONTROL_EVIDENCE_INVENTORY.md`, `scripts/research/hfd_address_xrefs.py`, `scripts/research/l99_runtime_frame_codec.py`, `scripts/research/l99_capture_frame_classifier.py`, `scripts/research/l99_usb_device_attribution.py`, test files
+- Untracked analysis scripts and outputs present (not staged)
+- `python -m pytest tests -q` passes for repo test suite
+
+#### Preserved constraints
+- Verified firmware identity: HFD_Code_V2.3.bin 313652 bytes SHA-256 A76806ADA9648D2672BBEBEAD8A9BB396C0BC6F3A0A071E22E99001AC3359D03
+- Canonical CFG checkpoints: 4096 baseline, 8192/512, 8192/1024, 12288/1024, 12288/1536 (PASS_BUDGET_TRUNCATED, reconciliation PASS)
+- JMPI evidence: literal-pool helper ACCEPTED, standalone post-processor ACCEPTED, legacy mode RETIRED
+- Hardware flashing: NO-GO
+- Runtime LCD update: UNKNOWN
+- GT911: HOLD (public teardown only)
+- Opcode 0x64 NOT claimed as verified screen-control command
+- 2060-byte packets NOT claimed as proof of live framebuffer refresh
+- No research tools altered; no commits/tags/pushes/version bump
+
 ### JMPI evidence research checkpoint (documentation sync)
 
 #### Added
