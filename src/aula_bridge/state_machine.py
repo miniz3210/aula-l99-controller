@@ -76,6 +76,7 @@ class _KeyState:
     down_time_ms: Optional[int] = None
     hold_emitted: bool = False
     secondary_hold_emitted: bool = False
+    device: str = ""
 
 
 class KeyStateMachine:
@@ -123,6 +124,7 @@ class KeyStateMachine:
             state.down_time_ms = t
             state.hold_emitted = False
             state.secondary_hold_emitted = False
+            state.device = device
             self._states[key] = state
             results.append(
                 PressResult(key=key, device=device, action=ACTION_NONE, timestamp_ms=t)
@@ -209,7 +211,7 @@ class KeyStateMachine:
                 results.append(
                     PressResult(
                         key=key,
-                        device="",
+                        device=state.device,
                         action=ACTION_NONE,
                         timestamp_ms=t,
                     )
@@ -218,6 +220,7 @@ class KeyStateMachine:
                 state.down_time_ms = None
                 state.hold_emitted = False
                 state.secondary_hold_emitted = False
+                state.device = ""
                 continue
 
             if state.state == STATE_PRESSED:
@@ -227,7 +230,7 @@ class KeyStateMachine:
                     results.append(
                         PressResult(
                             key=key,
-                            device="",
+                            device=state.device,
                             action=ACTION_HOLD,
                             duration_ms=held,
                             timestamp_ms=t,
@@ -242,7 +245,7 @@ class KeyStateMachine:
                     results.append(
                         PressResult(
                             key=key,
-                            device="",
+                            device=state.device,
                             action=ACTION_HOLD,
                             duration_ms=held,
                             timestamp_ms=t,
@@ -259,7 +262,7 @@ class KeyStateMachine:
                     results.append(
                         PressResult(
                             key=key,
-                            device="",
+                            device=state.device,
                             action=ACTION_SECONDARY_HOLD,
                             duration_ms=held,
                             timestamp_ms=t,

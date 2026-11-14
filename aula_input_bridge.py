@@ -42,6 +42,8 @@ from aula_bridge import (
     load_config,
 )
 from aula_bridge.provider import DryRunProvider, ProviderEvent
+from aula_bridge.dispatcher import ActionDispatcher, MockTransport
+from aula_bridge.action_mapping import ActionMap
 from aula_bridge.devices import (
     RAWINPUT,
     RAWINPUTDEVICE,
@@ -392,47 +394,71 @@ def build_machine(config: BridgeConfig) -> KeyStateMachine:
     )
 
 
-def emit_key_down(provider: DryRunProvider, key: str, device: str) -> None:
-    provider.emit(ProviderEvent(event="key_down", key=key, device=device))
+def emit_key_down(provider: DryRunProvider, dispatcher: ActionDispatcher, key: str, device: str) -> None:
+    emit_and_dispatch(provider, dispatcher, ProviderEvent(event="key_down", key=key, device=device))
 
 
-def emit_short_press(provider: DryRunProvider, key: str, device: str, duration_ms: int) -> None:
-    provider.emit(
+def emit_short_press(provider: DryRunProvider, dispatcher: ActionDispatcher, key: str, device: str, duration_ms: int) -> None:
+    emit_and_dispatch(
+        provider,
+        dispatcher,
         ProviderEvent(
             event="short_press", key=key, device=device, duration_ms=duration_ms
         )
     )
 
 
-def emit_hold(provider: DryRunProvider, key: str, device: str, duration_ms: int) -> None:
-    provider.emit(ProviderEvent(event="hold", key=key, device=device, duration_ms=duration_ms))
+def emit_hold(provider: DryRunProvider, dispatcher: ActionDispatcher, key: str, device: str, duration_ms: int) -> None:
+    emit_and_dispatch(provider, dispatcher, ProviderEvent(event="hold", key=key, device=device, duration_ms=duration_ms))
 
 
-def emit_secondary_hold(provider: DryRunProvider, key: str, device: str, duration_ms: int) -> None:
-    provider.emit(
+def emit_secondary_hold(provider: DryRunProvider, dispatcher: ActionDispatcher, key: str, device: str, duration_ms: int) -> None:
+    emit_and_dispatch(
+        provider,
+        dispatcher,
         ProviderEvent(
             event="secondary_hold", key=key, device=device, duration_ms=duration_ms
         )
     )
 
 
-def emit_repeat_ignored(provider: DryRunProvider, key: str, device: str) -> None:
-    provider.emit(ProviderEvent(event="repeat_ignored", key=key, device=device))
+def emit_repeat_ignored(provider: DryRunProvider, dispatcher: ActionDispatcher, key: str, device: str) -> None:
+    emit_and_dispatch(provider, dispatcher, ProviderEvent(event="repeat_ignored", key=key, device=device))
 
 
-def emit_key_up(provider: DryRunProvider, key: str, device: str, held: bool) -> None:
-    provider.emit(ProviderEvent(event="key_up", key=key, device=device, held=held))
+def emit_key_up(provider: DryRunProvider, dispatcher: ActionDispatcher, key: str, device: str, held: bool) -> None:
+    emit_and_dispatch(provider, dispatcher, ProviderEvent(event="key_up", key=key, device=device, held=held))
 
 
-def handle_result(provider: DryRunProvider, device: str, result: PressResult) -> None:
+def emit_and_dispatch(
+    provider: DryRunProvider,
+    dispatcher: ActionDispatcher,
+    event: ProviderEvent,
+) -> None:
+    """Emit event to provider first, then dispatch if supported.
+
+    Provider emits first to preserve seq assignment. Dispatcher is called
+    only after successful provider emit. Dispatcher exceptions are caught
+    and isolated from the Windows message loop.
+    """
+    provider.emit(event)
+    if event.event in {"short_press", "hold", "secondary_hold"}:
+        try:
+            dispatcher.dispatch(event)
+        except Exception:
+            pass
+
+
+def handle_result(provider: DryRunProvider, dispatcher: ActionDispatcher, result: PressResult) -> None:
+    device = result.device
     if result.action == "short_press":
-        emit_short_press(provider, result.key, device, result.duration_ms or 0)
+        emit_short_press(provider, dispatcher, result.key, device, result.duration_ms or 0)
     elif result.action == "hold":
-        emit_hold(provider, result.key, device, result.duration_ms or 0)
+        emit_hold(provider, dispatcher, result.key, device, result.duration_ms or 0)
     elif result.action == "secondary_hold":
-        emit_secondary_hold(provider, result.key, device, result.duration_ms or 0)
+        emit_secondary_hold(provider, dispatcher, result.key, device, result.duration_ms or 0)
     elif result.action == "repeat_ignored":
-        emit_repeat_ignored(provider, result.key, device)
+        emit_repeat_ignored(provider, dispatcher, result.key, device)
     # ACTION_NONE emits nothing (dead-zone / suppressed ups are silent).
 
 
@@ -442,6 +468,7 @@ def process_raw_input(
     key_map: LogicalKeyMap,
     machine: KeyStateMachine,
     provider: DryRunProvider,
+    dispatcher: ActionDispatcher,
 ) -> None:
     """Handle one WM_INPUT message: attribute, map, drive state machine."""
     data_size = wintypes.UINT(ctypes.sizeof(RAWINPUT))
@@ -494,16 +521,16 @@ def process_raw_input(
     if is_break:
         for result in machine.key_up(key, device, now):
             if result.action == "short_press":
-                emit_short_press(provider, key, device, result.duration_ms or 0)
+                emit_short_press(provider, dispatcher, key, device, result.duration_ms or 0)
             elif result.action == "hold":
-                emit_key_up(provider, key, device, held=True)
+                emit_key_up(provider, dispatcher, key, device, held=True)
             elif result.action == "repeat_ignored":
-                emit_repeat_ignored(provider, key, device)
+                emit_repeat_ignored(provider, dispatcher, key, device)
     else:
-        emit_key_down(provider, key, device)
+        emit_key_down(provider, dispatcher, key, device)
         for result in machine.key_down(key, device, now):
             if result.action == "repeat_ignored":
-                emit_repeat_ignored(provider, key, device)
+                emit_repeat_ignored(provider, dispatcher, key, device)
 
 
 def main(argv: Optional[list[str]] = None) -> int:
@@ -528,6 +555,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     key_map = LogicalKeyMap()
     machine = build_machine(config)
     provider = DryRunProvider(log_file=config.log_file, log_dir=config.log_dir)
+    transport = MockTransport()
+    action_map = ActionMap()
+    dispatcher = ActionDispatcher(transport=transport, action_map=action_map)
 
     running = True
 
@@ -545,17 +575,18 @@ def main(argv: Optional[list[str]] = None) -> int:
         msg = wintypes.MSG()
         while user32.PeekMessageW(ctypes.byref(msg), None, 0, 0, PM_REMOVE):
             if msg.message == WM_INPUT:
-                process_raw_input(msg, config, key_map, machine, provider)
+                process_raw_input(msg, config, key_map, machine, provider, dispatcher)
             user32.TranslateMessage(ctypes.byref(msg))
             user32.DispatchMessageW(ctypes.byref(msg))
 
         now = int(time.time() * 1000)
         machine.set_time(now)
         for result in machine.tick(now):
-            handle_result(provider, target.vid_pid if target else "unknown", result)
+            handle_result(provider, dispatcher, result)
 
         time.sleep(0.01)
 
+    dispatcher.close()
     provider.close()
     print("Bridge stopped.")
     return 0
