@@ -44,6 +44,9 @@ from aula_bridge import (
 from aula_bridge.provider import DryRunProvider, ProviderEvent
 from aula_bridge.dispatcher import ActionDispatcher, MockTransport
 from aula_bridge.action_mapping import ActionMap
+from aula_bridge.companion_optin_config import load as load_companion_config, CompanionOptInConfigError
+from aula_bridge.companion_button_mapping import load_companion_button_mapping, CompanionButtonMappingError
+from aula_bridge.companion_http_transport import CompanionHttpTransportError
 from aula_bridge.devices import (
     RAWINPUT,
     RAWINPUTDEVICE,
@@ -163,6 +166,15 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         "--capture-raw",
         action="store_true",
         help="Run raw Raw Input keyboard capture mode and exit",
+    )
+    parser.add_argument(
+        "--enable-companion",
+        action="store_true",
+        help="Enable Companion opt-in (requires --companion-config)",
+    )
+    parser.add_argument(
+        "--companion-config",
+        help="Path to Companion opt-in configuration JSON",
     )
     return parser.parse_args(argv)
 
@@ -533,8 +545,51 @@ def process_raw_input(
                 emit_repeat_ignored(provider, dispatcher, key, device)
 
 
+def build_companion_transport(companion_config, mapping_path: str):
+    """Build Companion transport for the enabled path.
+
+    Constructs CompanionHttpSender, CompanionHttpTransport, and
+    CompanionDispatchAdapter, then wraps the adapter in a bounded
+    CompanionDispatchWorker (queue capacity 8) so the Windows message-loop
+    thread only performs non-blocking queue admission. The Worker, not the
+    raw adapter, is injected into ActionDispatcher.
+    """
+    from aula_bridge.companion_http_transport import CompanionHttpTransport
+    from aula_bridge.companion_http_sender import CompanionHttpSender
+    from aula_bridge.companion_dispatch_adapter import CompanionDispatchAdapter
+    from aula_bridge.companion_dispatch_worker import CompanionDispatchWorker
+
+    button_mapping = load_companion_button_mapping(mapping_path)
+
+    # Prepare transport configuration - do not construct real HTTP sender
+    # This phase validates initialization and configuration only
+    http_sender = CompanionHttpSender()
+    http_transport = CompanionHttpTransport(
+        http_sender=http_sender,
+        host=companion_config.host,
+        port=companion_config.port,
+        timeout=companion_config.timeout,
+    )
+    dispatch_adapter = CompanionDispatchAdapter(
+        http_transport=http_transport,
+        button_mapping=button_mapping,
+    )
+    return CompanionDispatchWorker(
+        transport=dispatch_adapter,
+    )
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     args = parse_args(argv)
+
+    # Validate CLI flags
+    if args.enable_companion and not args.companion_config:
+        print("ERROR: --enable-companion requires --companion-config PATH")
+        return 1
+    if args.companion_config and not args.enable_companion:
+        print("ERROR: --companion-config requires --enable-companion")
+        return 1
+
     config = load_config(args.config)
 
     if args.list_devices:
@@ -555,9 +610,66 @@ def main(argv: Optional[list[str]] = None) -> int:
     key_map = LogicalKeyMap()
     machine = build_machine(config)
     provider = DryRunProvider(log_file=config.log_file, log_dir=config.log_dir)
-    transport = MockTransport()
+
+    # Initialize Companion if enabled
+    worker = None
+    if args.enable_companion:
+        try:
+            companion_config = load_companion_config(args.companion_config)
+        except CompanionOptInConfigError as e:
+            print(f"ERROR: Invalid Companion config: {e}")
+            return 1
+        except CompanionButtonMappingError as e:
+            print(f"ERROR: Invalid button mapping: {e}")
+            return 1
+
+        if not companion_config.enabled:
+            print("ERROR: Companion config has enabled=false but --enable-companion was specified")
+            return 1
+
+        if companion_config.mapping_file is None:
+            print("ERROR: Companion config requires mapping_file when enabled=true")
+            return 1
+
+        # Validate button mapping exists and is valid
+        try:
+            load_companion_button_mapping(companion_config.mapping_file)
+        except CompanionButtonMappingError as e:
+            print(f"ERROR: Invalid button mapping: {e}")
+            return 1
+        except OSError as e:
+            print(f"ERROR: Cannot read button mapping file: {e}")
+            return 1
+
+        # Construct transport inside Worker wrapper; any construction error
+        # fails fast and does not silently enable Companion.
+        try:
+            transport = build_companion_transport(companion_config, companion_config.mapping_file)
+        except (CompanionOptInConfigError, CompanionButtonMappingError, OSError,
+                  CompanionHttpTransportError) as e:
+            print(f"ERROR: Failed to initialize Companion transport: {e}")
+            return 1
+        worker = transport
+        print("Companion opt-in enabled. Transport configured.")
+    else:
+        transport = MockTransport()
+        print("Companion disabled. Using MockTransport.")
+
     action_map = ActionMap()
-    dispatcher = ActionDispatcher(transport=transport, action_map=action_map)
+    try:
+        dispatcher = ActionDispatcher(transport=transport, action_map=action_map)
+    except Exception as init_exc:
+        if worker is not None:
+            try:
+                worker.close()
+            except Exception as cleanup_exc:
+                # Report both the original initialization failure and the
+                # cleanup failure without hiding either.
+                raise RuntimeError(
+                    "Dispatcher initialization failed and Worker cleanup also failed: "
+                    f"{init_exc!r}; cleanup: {cleanup_exc!r}"
+                ) from init_exc
+        raise
 
     running = True
 
@@ -571,23 +683,40 @@ def main(argv: Optional[list[str]] = None) -> int:
     print("Bridge running. Provider=%s log=%s" % (config.provider, provider.path))
     print("Press Ctrl+C to stop.")
 
-    while running:
-        msg = wintypes.MSG()
-        while user32.PeekMessageW(ctypes.byref(msg), None, 0, 0, PM_REMOVE):
-            if msg.message == WM_INPUT:
-                process_raw_input(msg, config, key_map, machine, provider, dispatcher)
-            user32.TranslateMessage(ctypes.byref(msg))
-            user32.DispatchMessageW(ctypes.byref(msg))
+    try:
+        while running:
+            msg = wintypes.MSG()
+            while user32.PeekMessageW(ctypes.byref(msg), None, 0, 0, PM_REMOVE):
+                if msg.message == WM_INPUT:
+                    process_raw_input(msg, config, key_map, machine, provider, dispatcher)
+                user32.TranslateMessage(ctypes.byref(msg))
+                user32.DispatchMessageW(ctypes.byref(msg))
 
-        now = int(time.time() * 1000)
-        machine.set_time(now)
-        for result in machine.tick(now):
-            handle_result(provider, dispatcher, result)
+            now = int(time.time() * 1000)
+            machine.set_time(now)
+            for result in machine.tick(now):
+                handle_result(provider, dispatcher, result)
 
-        time.sleep(0.01)
+            time.sleep(0.01)
+    finally:
+        # Shutdown: dispatcher.close() invokes Worker.close() (transport is the
+        # Worker). Avoid duplicate Worker.close() calls. provider.close() runs
+        # even if dispatcher.close() raises.
+        dispatcher_close_error = None
+        try:
+            dispatcher.close()
+        except Exception as exc:  # noqa: BLE001
+            dispatcher_close_error = exc
+        provider.close()
+        if dispatcher_close_error is not None:
+            raise dispatcher_close_error
 
-    dispatcher.close()
-    provider.close()
+        if worker is not None and worker.is_alive:
+            # Worker.close() already reports if the worker remains alive after
+            # the bounded join timeout. An in-flight HTTP request cannot be
+            # forcibly cancelled; a full shutdown is not falsely claimed here.
+            pass
+
     print("Bridge stopped.")
     return 0
 

@@ -12,8 +12,8 @@ Turn the AULA L99 keyboard's built-in 320x480 touchscreen into a Stream Deck-sty
 - Branch: main
 - Remote: miniz3210/aula-l99-controller.git
 - Current published release: v0.1.1
-- HEAD commit: `0387967` — `docs: record bounded canonical MCore CFG checkpoint`
-- Working tree: modified (`scripts/research/hfd_cfg.py`, `tests/test_hfd_cfg_partition.py`); nothing staged, no commits created.
+- HEAD commit: `dd9c8b8` — baseline for the Windows Bridge Companion opt-in documentation checkpoint (see section 23a).
+- Working tree: `aula_input_bridge.py` modified (Companion CLI + shutdown integration); new untracked Companion production modules and tests; untracked audit reports; seven historical analysis artifacts preserved. Nothing staged; no commits created.
 - Local ignored research directory: tools/softce-aula-l99-research
 - Vendor binaries and extracted artifacts are local only and ignored by Git.
 
@@ -335,9 +335,9 @@ Neither third-party tree is committed to this project, and third-party firmware 
 
 ## 18. Pending work (not yet accepted or complete)
 
-- Bridge Dispatcher Integration: `ACCEPT` (MockTransport only; real Companion transport NOT IMPLEMENTED)
-- Bridge end-to-end device attribution: `NOT YET VERIFIED`
-- Real Bitfocus Companion transport: `NOT IMPLEMENTED`
+- Bridge Dispatcher Integration: `ACCEPT` (MockTransport and offline Companion transport)
+- Bridge end-to-end device attribution: `NOT YET VERIFIED` (offline device/seq preservation `VERIFIED`; live bridge attribution `UNVERIFIED`)
+- Real Bitfocus Companion transport: `IMPLEMENTED` for offline/loopback use only; live validation `UNVERIFIED`
 - USB-only visible LCD update: `NOT VERIFIED`
 
 ## 19. Firmware identity preservation
@@ -377,69 +377,168 @@ Chinese AULA software 1.0.1.4 remains the research baseline.
 - Offline Action Dispatcher
 - Pending Bridge integration
 
-## 23a. Companion offline integration (accepted for offline development only)
+## 23a. Windows Bridge Companion opt-in integration (offline v1)
 
-Bitfocus Companion is the preferred first external platform for the AULA L99 input bridge. The offline Companion integration (input-only integration) maps existing Mini Numpad HID events to Companion button press actions through a local bridge. It does not require firmware modification, flashing, or any hardware access.
+Bitfocus Companion is the preferred first external platform for the AULA L99 input bridge. The Companion integration maps existing Mini Numpad HID events to Companion button press actions through a local bridge. It does not require firmware modification, flashing, or any hardware access. Activation is strictly opt-in and disabled by default.
 
-### Scope and readiness
+**Git baseline:** `dd9c8b8` (branch `main`).
 
-- Safe for offline development and testing: unit/integration tests, dry-run development with DryRunProvider, mock transport validation, and mapping configuration validation.
-- Not yet suitable for production deployment with live Companion, unattended operation without monitoring, or networks where loopback isolation is insufficient.
-- No claim of production readiness is made.
+### Status classification
+
+- **ACCEPTED (offline v1 checkpoint):** Companion Offline v1 committed checkpoint as the accepted offline baseline.
+- **IMPLEMENTED:** Windows Bridge opt-in, CLI + JSON dual gate, config/mapping validation, bounded Worker, HTTP transport/sender, adapter.
+- **VERIFIED (offline):** default-disabled behavior, strict validation, FIFO ordering, overflow/shutdown-drop accounting, device/seq preservation, short-press-only dispatch, offline regression results.
+- **UNVERIFIED:** live Companion behavior, live device attribution, real HTTP responses from Companion 5.2.0+.
+- **NOT IMPLEMENTED:** authentication, health check, circuit breaker, HTTPS, hot reload, live acceptance.
+- **HOLD:** production deployment, unattended operation.
+- **NO-GO:** firmware flashing, unknown RAM writes, CFG expansion, GT911 investigation, LCD runtime control.
+
+### 1. Current Git baseline
+
+- HEAD `dd9c8b8`, branch `main`.
+- `aula_input_bridge.py` modified; Companion production modules and tests untracked; seven historical analysis artifacts preserved untracked.
+- No commits, tags, or pushes created for this checkpoint.
+
+### 2. Companion Offline v1 committed checkpoint
+
+- The offline integration (input-only) maps Mini Numpad HID events to Companion button presses.
+- No firmware modification, flashing, hardware access, or real Companion connection is part of this checkpoint.
+
+### 3. Windows Bridge opt-in implementation
+
+- `aula_input_bridge.py` adds `--enable-companion` and `--companion-config PATH`.
+- Without both flags, the bridge uses `MockTransport` and logs that Companion is disabled.
+- No sockets are opened on the default path.
+
+### 4. CLI + JSON activation contract
+
+- Both flags are required together; supplying only one exits with status 1.
+- The JSON config must set `companion.enabled = true`; a missing file or `enabled=false` does not enable Companion.
+- `enabled=true` requires an explicit `mapping_file`, which must exist and pass validation.
+- Invalid config, invalid mapping, unreadable files, or transport construction errors fail fast with exit code 1.
+
+### 5. Config and mapping validation
+
+- `companion_optin_config.py`: strict allowlist of top-level and companion fields; duplicate JSON keys rejected; `version` integer (1 only); loopback-only numeric host; port 1–65535; positive finite timeout; mapping path checks.
+- `companion_button_mapping.py`: strict allowlist; version integer (1 only); mappings object required; keys must be known `NUM_PAD_KEYS`; each location requires integer `page>=1`, `row>=0`, `column>=0`; extra fields rejected.
+
+### 6. Non-blocking Worker architecture
+
+- `build_companion_transport()` constructs `CompanionHttpSender` → `CompanionHttpTransport` → `CompanionDispatchAdapter`, then wraps the adapter in `CompanionDispatchWorker`.
+- The Worker, not the raw adapter, is injected into `ActionDispatcher`.
+- Exactly one daemon worker thread dequeues FIFO and calls `transport.send()`.
+- HTTP requests execute synchronously inside the dedicated Worker thread, not inside the Windows Raw Input message loop. The message-loop thread only performs non-blocking queue admission.
+- Worker exceptions are isolated and logged; one failed event does not stop the worker.
+- The HTTP transport modules themselves spawn no threads; the single Worker thread is the only background thread in the Companion path.
+
+### 7. Worker queue capacity 8
+
+- FIFO `queue.Queue(maxsize=8)`.
+- `send()` uses non-blocking `put_nowait()`.
+- A full queue drops the incoming event, increments `overflow_count`, and logs a WARNING.
+
+### 8. Overflow and shutdown-drop behavior
+
+- `overflow_count` and `shutdown_drops` are independent, runtime-readable counters.
+- Shutdown drains and counts pending events as `shutdown_drops`; queued events are never replayed.
+- A late `send()` after shutdown is rejected and counted as a shutdown drop.
+
+### 9. Worker race repair
+
+- `send()` and `close()` serialize shutdown-state checks, admission, and queue draining under a lock.
+- A late `send()` cannot enqueue after `close()` drains the queue.
+- The lock is not held during the bounded `join()`.
+
+### 10. Startup Worker leak repair
+
+- Dispatcher initialization failure closes the Worker.
+- `build_companion_transport()` is wrapped in try/except before the Worker reference is assigned; construction errors exit with status 1 and leave no partial Worker running.
+- A startup-failure injection test verifies no leaked Worker.
+
+### 11. Message-loop safety
+
+- The message loop is wrapped in `try/finally`.
+- The loop performs no HTTP I/O; it only enqueues events.
+
+### 12. Shutdown lifecycle
+
+- Shutdown order: `dispatcher.close()` (calls `Worker.close()`) then `provider.close()`.
+- `provider.close()` runs even if `dispatcher.close()` raises; a dispatcher close error is re-raised after provider cleanup.
+- `Worker.close()` is idempotent; it rejects new events, drains and counts pending events, then attempts a bounded join (default 5 s) without holding the lock.
+- An in-flight HTTP request cannot be forcibly cancelled. If the worker remains alive after the bounded join, that state is logged as a WARNING and a full shutdown is not falsely claimed.
+
+### 13. Latest test evidence
+
+- Historical implementation report: 1102 passed, 67 subtests passed.
+- Re-run for this checkpoint: `python -m pytest tests -q --basetemp=C:/temp/aula-l99-pytest-validation` → 1102 passed, 67 subtests passed, exit code 0, no failures, no cleanup errors.
+- Coverage includes config, activation contract, CLI, mapping, worker, dispatcher integration, offline E2E, runtime observability, startup failure injection, and bridge runtime integration.
+
+### 14. Known limitations
+
+- Live Companion behavior has not been independently validated.
+- No production deployment approval.
+- In-flight HTTP cannot be forcibly cancelled.
+- Mapping is loaded once at startup; no hot reload.
+- No authentication, health check, circuit breaker, HTTPS, or metrics.
+- HTTP only; loopback mitigates but is not defense-in-depth.
+
+### 15. Remaining development tasks
+
+- Live integration test against a real Companion 5.2.0+ instance.
+- Authentication support if required by Companion.
+- Health check before dispatch and a circuit breaker for repeated failures.
+- HTTPS consideration for defense-in-depth.
+- Bridge-level integration test for `provider.close()` exceptions and Worker join-timeout logging.
+- Independent live device-attribution validation.
+
+### 16. Next recommended implementation milestone
+
+Run a bounded live Companion acceptance test on loopback with a real Companion instance and an explicit test port, verifying short-press-only dispatch, device/seq preservation, and shutdown behavior. Keep this separate from firmware, LCD, CFG, and GT911 work.
 
 ### Companion modules (untracked, new since baseline)
 
 | Module | Purpose |
 |--------|---------|
 | `src/aula_bridge/companion_types.py` | Shared `ButtonLocation` frozen dataclass (page, row, column). |
-| `src/aula_bridge/companion_button_mapping.py` | Strict JSON mapping loader: logical numpad key → `ButtonLocation`. No network, no hardware access. |
-| `src/aula_bridge/companion_dispatch_adapter.py` | Adapter connecting ActionDispatcher to Companion HTTP Core. Processes only `short_press` events. |
-| `src/aula_bridge/companion_http_transport.py` | HTTP transport core for Companion 5.2.0 press API. Dependency-injected sender. No retries, no buffering, no background threads. |
-| `src/aula_bridge/companion_http_sender.py` | Security-hardened `urllib` sender. HTTP POST only, loopback-only (`127.0.0.1`), `http://` scheme only, no redirects, no credentials, no proxy. |
-| `src/aula_bridge/companion_transport.py` | `MockCompanionTransport` for offline testing. Records dispatched requests in order. No network I/O. |
+| `src/aula_bridge/companion_optin_config.py` | Strict JSON opt-in config loader; disabled by default. |
+| `src/aula_bridge/companion_button_mapping.py` | Strict JSON mapping loader: logical numpad key → `ButtonLocation`. |
+| `src/aula_bridge/companion_dispatch_adapter.py` | Adapter connecting ActionDispatcher to Companion HTTP Core; processes only `short_press`. |
+| `src/aula_bridge/companion_http_transport.py` | HTTP transport core; dependency-injected sender; no retries, no buffering, no threads. |
+| `src/aula_bridge/companion_http_sender.py` | Security-hardened `urllib` sender; loopback-only, `http://` only, no redirects, no proxy. |
+| `src/aula_bridge/companion_dispatch_worker.py` | Bounded async dispatch Worker; one daemon thread; FIFO capacity 8; drop accounting. |
+| `src/aula_bridge/companion_transport.py` | `MockCompanionTransport` for offline testing; no network I/O. |
 
-### Verified safety properties
+### Verified safety properties (offline)
 
-- Short-press-only: adapter processes only `short_press` events; `hold`, `secondary_hold`, `key_down`, `key_up`, `repeat_ignored` ignored (zero HTTP requests).
-- Hold suppression: all hold-type events produce zero HTTP requests; no command/payload reaches transport.
-- Device identity preserved: `ProviderEvent.device` never mutated; logged in INFO logs; included in transport metadata.
-- Event sequence preserved: `ProviderEvent.seq` never mutated (frozen dataclass); dispatch order preserved through mock transport.
-- HTTP response logging: adapter logs key, device, seq, event, status_code, success, error_code; status codes mapped to semantic error codes.
+- Short-press-only: adapter processes only `short_press`; `hold`, `secondary_hold`, `key_down`, `key_up`, `repeat_ignored` ignored (zero HTTP requests).
+- Hold suppression: all hold-type events produce zero HTTP requests.
+- Device identity preserved: `ProviderEvent.device` never mutated; logged and included in transport metadata.
+- Event sequence preserved: `ProviderEvent.seq` never mutated; Worker snapshots with `dataclasses.replace()`; FIFO order preserved. (`ProviderEvent` is a mutable dataclass; immutability is enforced by convention and the Worker snapshot, not `frozen=True`.)
+- HTTP response logging: key, device, seq, event, status_code, success, error_code; status codes mapped to semantic error codes.
 - HTTP failure handling: all non-200 responses produce `HttpResponse(success=False)`; no exceptions propagate.
-- No default button mappings: explicit mapping file required; empty mappings return empty `MappingProxyType`.
-- Strict JSON validation: duplicate keys rejected; version integer (version 1 only); location fields genuine integers; negative values rejected; unknown keys rejected; extra fields rejected; missing required fields rejected.
+- No default button mappings: explicit mapping file required; empty mappings return an empty `MappingProxyType`.
+- Strict JSON validation: duplicate keys, wrong types, negative values, unknown keys, extra fields, and missing fields rejected.
 - No automatic retries: exactly one sender call per press; redirects rejected.
-- No event buffering: each `send()` processes exactly one event; `flush()`/`close()` are no-ops.
-- No background threads: all calls synchronous; no threading/asyncio/concurrent.futures.
-- No accidental live network activation: all tests use fake/mock senders; loopback-only validation; `http://` scheme only.
-- No firmware/hardware access: zero imports of serial/usb/hid; pure Python; dependency injection.
-- No modification of accepted Bridge behavior: ActionDispatcher, ProviderEvent, DryRunProvider unchanged.
-- No hidden port dependency: host and port explicit in constructor (defaults `127.0.0.1:8000`, overridable).
+- No stale event replay: shutdown drops queued events without re-queueing.
+- No accidental live network activation: all tests use fake/mock senders; loopback-only validation; `http://` only.
+- No firmware/hardware access: zero imports of serial/usb/hid; dependency injection.
+- No modification of accepted Bridge behavior: `ActionDispatcher`, `ProviderEvent`, `DryRunProvider` unchanged.
+- DryRunProvider preserved on both the default and Companion paths.
+- Default Companion HTTP port is `8000`.
 
-### HTTP Sender Security (verified)
+### HTTP sender security (verified)
 
-- Redirect rejection: `_NoRedirectHandler` returns `None` for all redirect codes (301, 302, 303, 307, 308).
+- Redirect rejection: `_NoRedirectHandler` returns `None` for all redirect codes.
 - Scheme validation: only `http://` permitted; `https://`, `ftp://`, `file://`, `ws://` rejected.
 - Userinfo rejection: username/password in URL rejected; credentials never in error messages.
-- Path/query/fragment restriction: fragment and query parameters rejected; path must match `^/api/location/(\d+)/(\d+)/(\d+)/press$`.
+- Path/query/fragment restriction: fragment and query rejected; path must match `^/api/location/(\d+)/(\d+)/(\d+)/press$`.
 - Loopback-only restriction: host validated via `ipaddress.ip_address().is_loopback`; `127.0.0.1` allowed; `localhost` rejected.
-
-### Remaining risks
-
-- No integration test with real Companion instance (UNKNOWN — all tests use fakes).
-- Button mapping file not hot-reloadable (INFERENCE).
-- No authentication support (INFERENCE).
-- Single-threaded synchronous HTTP (INFERENCE).
-- No health check / connection verification (INFERENCE).
-- Error codes not mapped to user actions (INFERENCE).
-- No encryption (HTTP only) (VERIFIED).
-- Fixed 5s default timeout (INFERENCE).
-- No circuit breaker (INFERENCE).
 
 ### Acceptance recommendation
 
-- **ACCEPT** — Companion integration is safe for offline development and testing.
+- **ACCEPT (offline development and testing only).**
 - Not yet suitable for production deployment with live Companion.
+- No claim of production readiness; live Companion behavior remains unverified.
 
 ## 24. Current session responsibilities
 
@@ -457,9 +556,9 @@ Documentation and bounded repairs
 
 ## 25. Next planned task
 
-Complete Bridge Dispatcher Integration, independently verify device identity, event ordering, DryRunProvider preservation, and mock dispatch behavior.
+Run the bounded live Companion acceptance test on loopback with a real Companion 5.2.0+ instance and an explicit test port: verify short-press-only dispatch, device/seq preservation, and shutdown behavior. Keep this separate from firmware, LCD, CFG, and GT911 work.
 
-Do not mark that task ACCEPTED or COMPLETE until its final report and independent review.
+Do not mark live Companion behavior ACCEPTED until that test and independent review are complete.
 
 Do not restart firmware discovery.
 
@@ -467,11 +566,11 @@ Do not restart firmware discovery.
 
 **Research Status:** All accepted checkpoints preserved. CFG and JMPI evidence stable. Offline utilities documented. Safety gates preserved.
 
-**Current status:** Bridge Dispatcher Integration ACCEPTED after independent review. Device propagation verified; real Companion transport NOT IMPLEMENTED.
+**Current status:** Windows Bridge Companion opt-in integration IMPLEMENTED and ACCEPTED for offline development/testing at baseline `dd9c8b8`. Live Companion behavior UNVERIFIED. Real Companion transport implemented for loopback/offline use only.
 
 **Handoff Ready:** Yes - All three allowed documentation files updated, firmware identity preserved, safety constraints maintained.
 
-**Next Steps:** Session D continues documentation and bounded repairs. New chat should continue with Bridge Dispatcher Integration implementation.
+**Next Steps:** Run bounded live Companion acceptance on loopback; then address authentication, health check, and circuit breaker before any production consideration.
 
 ## 15. Resume commands
 

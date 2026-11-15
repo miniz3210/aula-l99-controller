@@ -416,17 +416,21 @@ Bitfocus Companion is the preferred first external platform for the AULA L99 inp
 ### Scope and readiness
 
 - Safe for offline development and testing: unit/integration tests, dry-run development with DryRunProvider, mock transport validation, and mapping configuration validation.
+- Companion is strictly opt-in and disabled by default. Activation requires both the CLI flag and a JSON config file; the default runtime path still uses `MockTransport` and opens no sockets.
 - Not yet suitable for production deployment with live Companion, unattended operation without monitoring, or networks where loopback isolation is insufficient.
-- No claim of production readiness is made. Production use requires authentication support (if Companion requires it), a health check endpoint before dispatch, a circuit breaker for repeated failures, HTTPS consideration for defense-in-depth, and a live integration test with real Companion 5.2.0+.
+- No claim of production readiness is made. Live Companion behavior has not been independently validated. Production use requires authentication support (if Companion requires it), a health check endpoint before dispatch, a circuit breaker for repeated failures, HTTPS consideration for defense-in-depth, and a live integration test with real Companion 5.2.0+.
 
 ### Companion modules (untracked, new since baseline)
 
 | Module | Purpose |
 |--------|---------|
 | `src/aula_bridge/companion_types.py` | Shared `ButtonLocation` frozen dataclass (page, row, column). |
+| `src/aula_bridge/companion_optin_config.py` | Strict JSON opt-in configuration loader. Validates `enabled`, loopback `host`, `port`, `timeout`, and `mapping_file`; missing file yields the disabled default. No network, no hardware access. |
 | `src/aula_bridge/companion_button_mapping.py` | Strict JSON mapping loader: logical numpad key → `ButtonLocation`. No network, no hardware access. |
+| `src/aula_bridge/companion_dispatch_adapter.py` | Adapter connecting ActionDispatcher to Companion HTTP Core. Processes only `short_press` events. |
 | `src/aula_bridge/companion_http_transport.py` | HTTP transport core for Companion 5.2.0 press API. Dependency-injected sender. No retries, no buffering, no background threads. |
 | `src/aula_bridge/companion_http_sender.py` | Security-hardened `urllib` sender. HTTP POST only, loopback-only (`127.0.0.1`), `http://` scheme only, no redirects, no credentials, no proxy. |
+| `src/aula_bridge/companion_dispatch_worker.py` | Bounded asynchronous dispatch worker. Exactly one daemon thread, FIFO queue capacity 8, non-blocking admission, overflow and shutdown-drop accounting. |
 | `src/aula_bridge/companion_transport.py` | `MockCompanionTransport` for offline testing. Records dispatched requests in order. No network I/O. |
 
 ### Verified safety properties
@@ -434,18 +438,49 @@ Bitfocus Companion is the preferred first external platform for the AULA L99 inp
 - **Short-press only:** `CompanionDispatchAdapter` processes only `short_press` events; `hold`, `secondary_hold`, `key_down`, `key_up`, `repeat_ignored` are ignored (zero HTTP requests).
 - **Hold suppression:** All hold-type events produce zero HTTP requests; no command or payload reaches the transport.
 - **Device identity preserved:** `ProviderEvent.device` is never mutated; logged in INFO logs and included in transport metadata.
-- **Event sequence preserved:** `ProviderEvent.seq` never mutated (frozen dataclass); events dispatched in call order; order preserved through mock transport.
+- **Event sequence preserved:** `ProviderEvent.seq` is never mutated. The Worker snapshots each event with `dataclasses.replace()` at enqueue time, so later caller mutation cannot affect queued data. FIFO order is preserved. (`ProviderEvent` itself is a mutable dataclass; immutability is enforced by convention and by the Worker snapshot, not by `frozen=True`.)
 - **HTTP response logging:** Adapter logs key, device, seq, event, status_code, success, error_code; all status codes mapped to semantic error codes (200→success, 204→NO_CONTROL, 400→INVALID_LOCATION, 403→FORBIDDEN, 4xx→CLIENT_ERROR, 5xx→SERVER_ERROR, others→UNEXPECTED_STATUS).
 - **HTTP failure handling:** All non-200 responses produce `HttpResponse(success=False)`; no exceptions propagate; all error paths caught and converted.
 - **No default button mappings:** `load_companion_button_mapping` requires an explicit mapping file; empty mappings return an empty `MappingProxyType`; no automatic/default locations invented.
 - **Strict JSON validation:** Duplicate JSON keys rejected; version must be integer (version 1 only); all location fields (page, row, column) must be genuine integers (bool/float/string rejected); negative values rejected; unknown logical keys rejected; extra fields rejected; missing required fields rejected; top-level JSON must be object; mappings must be object.
 - **No automatic retries:** Transport makes exactly one call to sender; sender makes exactly one `opener.open()` call; redirects rejected (`_NoRedirectHandler` returns `None` for all redirect codes).
-- **No event buffering:** Each `send()` processes exactly one event; `flush()` and `close()` are no-ops; no internal queues or buffers.
-- **No background threads:** All calls synchronous; `press()` returns only after sender completes; no threading, asyncio, or `concurrent.futures`.
+- **No stale event replay:** Worker shutdown drops queued events without re-queueing them; a late `send()` after shutdown is rejected and counted.
+- **Bounded Worker queue:** FIFO `queue.Queue(maxsize=8)`. Admission uses non-blocking `put_nowait()`; a full queue drops the incoming event, increments `overflow_count`, and logs a WARNING.
+- **Drop accounting:** `overflow_count` and `shutdown_drops` are independent counters, both readable at runtime.
 - **No accidental live network activation:** All tests use fake/mock senders; sender validates host is loopback before any connection; non-loopback hosts rejected; only `http://` scheme allowed (`https://`, `ftp://`, `file://`, `ws://` rejected).
 - **No firmware/hardware access:** Zero imports of `serial`, `usb`, `hid`, or hardware libraries; pure Python with dependency injection; transport protocol is abstract interface with no I/O.
-- **No modification of accepted Bridge behavior:** `ActionDispatcher`, `ProviderEvent`, and `DryRunProvider` unchanged; companion adapter implements the `Transport` protocol.
-- **No hidden port dependency:** Host and port required explicitly in constructor (defaults `127.0.0.1:8000` but overridable); E2E tests use explicit port (never assume 5000 or 8000).
+- **No modification of accepted Bridge behavior:** `ActionDispatcher`, `ProviderEvent`, and `DryRunProvider` are unchanged; the Companion adapter and Worker implement the `Transport` protocol.
+- **DryRunProvider preserved:** The default and Companion paths both use `DryRunProvider`; enabling Companion does not remove dry-run logging.
+- **No hidden port dependency:** Default Companion HTTP port is `8000`; host and port are required explicitly in the transport constructor (defaults `127.0.0.1:8000`, overridable). E2E tests use an explicit test port (never assume 5000 or 8000).
+
+### Activation contract (CLI + JSON dual gate)
+
+- `--enable-companion` and `--companion-config PATH` must be supplied together; supplying only one is an error and exits with status 1.
+- The JSON config must set `companion.enabled = true`. A config with `enabled=false`, or a missing config file, does not enable Companion.
+- `enabled=true` requires an explicit `mapping_file`; the mapping file must exist and pass strict validation.
+- Invalid config, invalid mapping, unreadable files, or transport construction errors fail fast with exit code 1. No partial Worker is left running.
+- Without both flags, the bridge uses `MockTransport` and logs that Companion is disabled.
+
+### Bounded Worker architecture
+
+- `build_companion_transport()` constructs `CompanionHttpSender` → `CompanionHttpTransport` → `CompanionDispatchAdapter`, then wraps the adapter in a `CompanionDispatchWorker` (queue capacity 8).
+- The Worker, not the raw adapter, is injected into `ActionDispatcher`. The Windows Raw Input message-loop thread only performs non-blocking queue admission; it never performs HTTP I/O.
+- Exactly one daemon worker thread dequeues FIFO and calls `transport.send()`. Worker exceptions are isolated and logged; one failed event does not kill the worker.
+- Worker `send()`/`close()` share a lock so a late `send()` cannot enqueue after shutdown drains the queue.
+- Startup failure after Worker construction is repaired by closing the Worker; the dispatcher-initialization path also closes the Worker if dispatcher setup raises.
+
+### Shutdown lifecycle
+
+- The message loop is wrapped in `try/finally`.
+- Shutdown order is `dispatcher.close()` (which calls `Worker.close()`) then `provider.close()`; `provider.close()` runs even if `dispatcher.close()` raises.
+- `Worker.close()` is idempotent: it rejects new events, drains and counts pending events as shutdown drops (never replaying them), then attempts a bounded join (default 5 s) without holding the lock.
+- An in-flight HTTP request cannot be forcibly cancelled. If the worker is still alive after the bounded join, that state is logged as a WARNING and a full shutdown is not falsely claimed.
+
+### Offline testing and acceptance status
+
+- Offline unit, integration, runtime-observability, and startup-failure-injection tests pass (see CHANGELOG and `docs/PROJECT_HANDOVER.md`).
+- Acceptance is limited to offline development and testing. Live Companion behavior has not been independently validated.
+- No production readiness is claimed.
 
 ### HTTP Sender Security (verified)
 
@@ -459,10 +494,11 @@ Bitfocus Companion is the preferred first external platform for the AULA L99 inp
 
 | Risk | Classification | Details |
 |------|----------------|---------|
-| No integration test with real Companion instance | UNKNOWN | All tests use fakes; real API behavior (rate limits, auth, schema changes) untested |
+| No integration test with real Companion instance | UNKNOWN | All tests use fakes; real API behavior (rate limits, auth, schema changes) untested; live Companion behavior not independently validated |
 | Button mapping file not hot-reloadable | INFERENCE | Mapping loaded once at startup; file changes require restart |
 | No authentication support | INFERENCE | Companion HTTP API may require auth token; not implemented |
-| Single-threaded synchronous HTTP | INFERENCE | Blocking I/O; could stall bridge if Companion unresponsive (timeout mitigates) |
+| HTTP executes on the dedicated Worker thread | VERIFIED | HTTP requests run synchronously inside the Worker thread, not on the Windows message-loop thread; the message loop only enqueues |
+| In-flight HTTP cannot be forcibly cancelled | VERIFIED | A blocking request finishes or times out; shutdown uses a bounded join and does not kill the thread |
 | No health check / connection verification | INFERENCE | No pre-flight check that Companion is reachable before dispatch |
 | Error codes not mapped to user actions | INFERENCE | Logs errors but no retry/backoff/alerting strategy defined |
 | No encryption (HTTP only) | VERIFIED | `http://` only; loopback mitigates but not defense-in-depth |

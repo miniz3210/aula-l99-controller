@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+### Companion Windows Bridge opt-in integration (final companion bridge documentation)
+
+#### ADDED
+- Companion opt-in configuration loader (`src/aula_bridge/companion_optin_config.py`): strict JSON validation, loopback-only host, port/timeout checks, disabled-by-default behavior.
+- Bounded Companion dispatch worker (`src/aula_bridge/companion_dispatch_worker.py`): one daemon thread, FIFO queue capacity 8, non-blocking admission, overflow and shutdown-drop accounting, bounded join.
+- CLI + JSON dual-gate integration in `aula_input_bridge.py` (`--enable-companion`, `--companion-config`).
+- Worker and configuration tests, runtime integration tests, startup failure injection tests, and runtime observability tests.
+
+#### CHANGED
+- Windows Bridge optional transport selection: Companion is opt-in; the default path still uses `MockTransport`.
+- Non-blocking Companion dispatch: HTTP I/O runs on the dedicated Worker thread, not on the Windows Raw Input message loop.
+- Startup and shutdown cleanup: message loop wrapped in `try/finally`; deterministic `dispatcher.close()` then `provider.close()` ordering.
+- Worker shutdown race protection: `send()` and `close()` serialize admission and draining under a lock.
+- Startup Worker leak repair: dispatcher initialization failure closes the Worker; no partial Worker is left running.
+
+#### VERIFIED
+- Default-disabled behavior: missing config or `enabled=false` does not enable Companion.
+- Strict config and mapping validation: duplicate keys, unknown fields, wrong types, and invalid ranges rejected.
+- Worker FIFO ordering preserved.
+- Overflow and shutdown-drop accounting are independent and observable.
+- Device and sequence preservation: `ProviderEvent.device` and `seq` preserved; Worker snapshots events with `dataclasses.replace()`.
+- Short-press-only HTTP behavior: `hold` and `secondary_hold` produce zero HTTP requests.
+- Offline regression results: `python -m pytest tests -q --basetemp=C:/temp/aula-l99-pytest-validation` → 1102 passed, 67 subtests passed, exit code 0.
+
+#### LIMITATIONS
+- No live Companion acceptance: live Companion behavior has not been independently validated.
+- No production deployment approval.
+- In-flight HTTP cannot be forcibly cancelled; shutdown uses a bounded join and logs if the worker remains alive.
+- Firmware/LCD research remains separate; no firmware, CFG, GT911, or LCD runtime-control changes.
+
 ### Offline research checkpoints documentation sync
 
 #### Added
