@@ -2,6 +2,186 @@
 
 Continue this project from the verified state below. Do not restart the reverse engineering from scratch and do not repeat tests already marked verified.
 
+## AULA L99 V9.2 validated collectors checkpoint — d42f6f1
+
+### Git checkpoint
+Branch: main
+
+Commit:
+d42f6f1dc97af756b104bfbbb50714fed022dc42
+
+Commit message:
+research: add validated AULA L99 V9.2 collector tooling
+
+Remote:
+local HEAD and origin/main both matched d42f6f1
+
+### Session A computed-call collector
+Status:
+FIX_A_PASS
+
+Collector:
+V92ComputedCallCollector.java
+
+Baseline SHA-256:
+F635670B29A5E239A9A264966F2372D9449A15746D1DDC0CDDF8CC63B0D15A62
+
+Final SHA-256:
+5F8E9E244F563AF18A243388E1BD50AD87EF3B65591BAD9C7B7B9F54A24835BF
+
+Live output:
+43776 bytes
+
+Live output SHA-256:
+346b3d103808b7ea5fc72f7d191182002221de4061433b4e640597e5c01b4239
+
+Gates:
+- real Ghidra 12.1.4 compile and execution passed;
+- fatal marker count zero;
+- JSON parsed;
+- validator exit code zero;
+- exactly 9 call-site records;
+- exactly 4 pointer-cell records;
+- 19 offline tests passed.
+
+### Session B shared-state collector
+Preserve both the historical failure and the superseding acceptance.
+Historical status:
+FIX_B_PROJECT_INTEGRITY_FAILED
+The direct run against the original project changed Ghidra internal project storage from db.15.gbf to db.18.gbf. Preserve this as historical evidence.
+
+Superseding status:
+FIX_B_PASS_ON_DISPOSABLE_PROJECT
+
+Collector:
+V92SharedStateCollector.java
+
+Final SHA-256:
+F256C3593C45F3684CB49DE506BC64C29F57EE37C5E39C4707AB1D391BEF22C6
+
+Live output:
+329455 bytes
+
+Live output SHA-256:
+7a0410ee4189f28105ec4bd12776ae61140d1ea5c69e6576c0dbf01391e97eb2
+
+Recheck status-file SHA-256:
+E0975464BB6330444118DE9535F565D885BB3A96AC5CDB3FFAE9C0B399F1EB8E
+
+Gates:
+- real Ghidra 12.1.4 compile and execution passed;
+- disposable full project copy used;
+- fatal marker count zero;
+- JSON parsed;
+- validator exit code zero;
+- original project file inventory matched before and after;
+- original project SHA-256 inventory matched before and after;
+- 20 offline tests passed.
+
+### Session C boundary collector
+Status:
+FIX_C_PASS
+
+Collector:
+V92BoundaryCollector.java
+
+Baseline SHA-256:
+62181151D7BEF8763037537AB18DBD53ACDACADF8741B41B112B8C3F6856083F
+
+Final SHA-256:
+56745F0A0B5898D549DBCDAE6A812F1778817A4208596AD8D8D19B785EF0A17E
+
+Gates:
+- 6 remote attempts;
+- attempt6 compiled and executed successfully;
+- process exit code zero;
+- fatal marker count zero;
+- JSON parsed;
+- validator exit code zero;
+- 13 offline tests passed;
+- original project remained byte-identical;
+- Fix-A and Fix-B source hashes remained unchanged.
+
+Live result:
+- output size: 280864 bytes;
+- target: 0x60049B90;
+- bounded window: 0x60049A90 through 0x60049C90;
+- raw bytes: 513;
+- instruction inventory: 218;
+- classification: INSUFFICIENT_EVIDENCE.
+
+INSUFFICIENT_EVIDENCE is a valid bounded research result, not an execution failure.
+
+### Validated Ghidra compatibility corrections
+Summarize:
+- correct MemoryBlock import;
+- getDefaultOperandRepresentation used for operand display;
+- OperandType handled as an integer bitmask;
+- getReferencesFrom(Address) handled as Reference[];
+- getReferencesTo(Address) handled as ReferenceIterator;
+- computed-call evidence uses isCall() and isComputed();
+- address conversion uses a renamed addressFromOffset helper and the default address space;
+- output JSON is supplied by post-script argument;
+- FunctionIterator is iterated explicitly;
+- unsupported instruction-flow API guesses were removed;
+- no project mutation is performed.
+
+### Current research verdict
+INSUFFICIENT_EVIDENCE
+State clearly:
+- the three bounded V9.2 collectors are validated;
+- V9.2 has not confirmed an LCD runtime display handler;
+- no framebuffer, Mini Numpad runtime update command, touch-coordinate route, or display-specific callback has been established.
+
+### Runtime package warning
+DO NOT USE THE OLD V9.2 ZIP OR RUN run_v9_2.sh.
+Explain that the existing package and ZIP were built before the final collector fixes and are not runtime-ready.
+Known runner defects include:
+- uses -import instead of -process;
+- does not pass -noanalysis and -readOnly correctly;
+- script path and post-script interface are incorrect;
+- collector output paths are not passed correctly;
+- unrelated Java collectors may be compiled together;
+- Ghidra log scanning does not use the actual combined log;
+- final publication is incomplete.
+
+### Exact next bounded task
+1. Rebuild the integration package using the final validated A/B/C collectors.
+2. Repair run_v9_2.sh.
+3. Use isolated Java script directories.
+4. Rebuild a POSIX-path ZIP.
+5. Run sequential combined smokes against disposable project copies.
+6. Run the complete deterministic two-run V9.2 pipeline only after combined smoke acceptance.
+7. Preserve the original Ghidra project byte-for-byte.
+
+### Important locations
+Windows:
+C:\temp\aula-l99-controller\v9_2_staging\
+integration\aula_l99_v9_2_pipeline
+
+C:\temp\aula-l99-controller\v9_2_staging\
+integration\FIX_A_REPORT.md
+
+C:\temp\aula-l99-controller\v9_2_staging\
+integration\FIX_B_REPORT.md
+
+C:\temp\aula-l99-controller\v9_2_staging\
+integration\FIX_B_RECHECK_STATUS.txt
+
+C:\temp\aula-l99-controller\v9_2_staging\
+integration\FIX_C_REPORT.md
+
+REA:
+/home/reauser/rea-lab/work/aula_l99_v9_2_fix_a
+
+/home/reauser/rea-lab/work/aula_l99_v9_2_fix_b
+
+/home/reauser/rea-lab/work/aula_l99_v9_2_fix_c
+
+/home/reauser/rea-lab/work/aula_l99_v9_2_project_isolation/fix_b_recheck
+
+/home/reauser/rea-lab/work/aula_l99_v9_2_project_isolation/fix_c
+
 ## 1. Mission
 
 Turn the AULA L99 keyboard's built-in 320x480 touchscreen into a Stream Deck-style controller: custom icons, multiple independent touch zones, PC-side actions, and dynamic status fields, while preserving the stock touch-to-keyboard logic where practical.

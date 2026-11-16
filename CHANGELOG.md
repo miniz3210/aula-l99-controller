@@ -2,6 +2,69 @@
 
 ## Unreleased
 
+### AULA L99 V9.2 validated collector checkpoint (2026-11-16)
+
+#### Added
+- Validated V9.2 Session A computed-call collector: `V92ComputedCallCollector.java` — status FIX_A_PASS; final SHA-256 `5F8E9E244F563AF18A243388E1BD50AD87EF3B65591BAD9C7B7B9F54A24835BF`; live output 43776 bytes, SHA-256 `346b3d103808b7ea5fc72f7d191182002221de4061433b4e640597e5c01b4239`
+- Validated V9.2 Session B shared-state collector: `V92SharedStateCollector.java` — status FIX_B_PASS_ON_DISPOSABLE_PROJECT (superseding FIX_B_PROJECT_INTEGRITY_FAILED); final SHA-256 `F256C3593C45F3684CB49DE506BC64C29F57EE37C5E39C4707AB1D391BEF22C6`; live output 329455 bytes, SHA-256 `7a0410ee4189f28105ec4bd12776ae61140d1ea5c69e6576c0dbf01391e97eb2`
+- Validated V9.2 Session C boundary collector: `V92BoundaryCollector.java` — status FIX_C_PASS; final SHA-256 `56745F0A0B5898D549DBCDAE6A812F1778817A4208596AD8D8D19B785EF0A17E`; live output 280864 bytes at target `0x60049B90`; classification INSUFFICIENT_EVIDENCE
+- Real Ghidra 12.1.4 compile and execution validation passed for all collectors
+- Disposable-project isolation introduced after the B integrity incident
+- Checkpoint `d42f6f1` pushed to `main`; local HEAD and origin/main matched
+- Current research verdict: INSUFFICIENT_EVIDENCE
+- Runtime package rebuild still required before pipeline acceptance
+
+#### Verification
+- local HEAD and origin/main matched at d42f6f1
+
+### Safe dynamic COM port discovery for EEEF:268A (2026-11-16)
+
+#### Added
+- New Windows COM discovery module: `src/aula_bridge/windows_com_discovery.py`
+  - PowerShell Get-CimInstance against Win32_PnPEntity with -NoProfile -NonInteractive
+  - Machine-readable JSON output parsed defensively
+  - Subprocess argument arrays (no shell=True)
+  - Bounded timeout (default 10s)
+  - Dependency injection for offline testing
+- Dynamic COM port discovery integrated into `scripts/replay_captured_screen_win32.py`
+  - Automatic discovery when --port omitted
+  - Explicit --port always wins (bypasses discovery)
+  - --detect-port mode: prints resolved COM port, exits without loading payload or opening port
+  - --detect-port and --port together rejected by argparse
+  - Removed hard-coded COM8 implicit fallback
+- Fail-closed discovery behavior:
+  - Zero EEEF:268A devices → NoMatchingDeviceError with actionable message
+  - Multiple EEEF:268A COM ports → MultipleMatchingDevicesError listing candidates
+  - Duplicate inventory records for same COM port deduplicated
+  - Keyboard HID VID:PID 0C45:800A explicitly ignored
+  - Unrelated USB serial devices ignored
+  - Matching records without valid COM port ignored
+  - Malformed records handled gracefully
+  - Case-insensitive VID:PID matching
+  - COM port validation: COM1-COM999 only, normalized to uppercase
+- 44 focused offline tests added: `tests/test_windows_com_discovery.py`
+  - Discovery parsing and selection (13 cases)
+  - Inventory acquisition (8 cases)
+  - CLI behavior (4 cases)
+  - No hardware access verification (3 cases)
+- All 38 existing Win32 transport tests continue to pass
+
+#### Changed
+- README.md: Documented automatic discovery, --detect-port, explicit --port override
+- Removed PORT_DEFAULT = "COM8" from replay_captured_screen_win32.py
+
+#### Safety
+- No COM port opened during discovery or tests
+- No serial/USB/HID operations
+- No physical device accessed
+- No payload sent during discovery or --detect-port
+- All tests fully offline with mocked inventory
+
+#### Verification
+- `python -m pytest tests/test_windows_com_discovery.py tests/test_win32_transport.py -v` → 82 passed
+- aula_payload_hex.txt SHA-256 unchanged: 1e3e6356ad0be3c1b0a6745c74bf0dccfe33bce35eb1537bf81e6eeca2ada673
+- Payload: 154 chunks, 309,071 bytes (unchanged)
+
 ### End-of-day documentation consolidation (2026-11-15)
 
 #### Physical Raw Input (VERIFIED)

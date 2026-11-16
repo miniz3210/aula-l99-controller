@@ -289,6 +289,59 @@ for known captures (e.g., `aula_home_numpad_transition`). Bounded memory, no har
 Acceptance: **ACCEPT_WITH_LIMITATIONS** — operates on existing CSV captures only; no live
 capture capability; device addresses are capture-local and not generalizable.
 
+## Tooling: Win32 Photo Frame Uploader with Dynamic COM Discovery
+
+`scripts/replay_captured_screen_win32.py` is the Win32 overlapped I/O uploader for the verified
+Photo Frame upload stream (`aula_payload_hex.txt`). It uses native Windows overlapped I/O to submit
+complete 2060-byte logical packets asynchronously, matching the official application's transfer
+architecture.
+
+### Dynamic COM Port Discovery (VID:PID EEEF:268A)
+
+The uploader automatically discovers the AULA L99 screen controller's virtual COM port by querying
+Windows Plug and Play inventory for `USB\VID_EEEF&PID_268A`. Discovery:
+
+- Does **not** open the COM port
+- Does **not** send any data to the device
+- Does **not** require administrator rights (standard Windows inventory access)
+- Is **fail-closed**: zero or multiple matches raise actionable errors
+- Ignores the keyboard HID device (VID:PID 0C45:800A) and unrelated USB serial devices
+
+### CLI Usage
+
+```powershell
+# Automatic discovery (recommended)
+python scripts/replay_captured_screen_win32.py --input aula_payload_hex.txt --quiet
+
+# Explicit port override
+python scripts/replay_captured_screen_win32.py --port COM8 --input aula_payload_hex.txt --quiet
+
+# Discovery only (prints resolved COM port, exits without loading payload or opening port)
+python scripts/replay_captured_screen_win32.py --detect-port
+```
+
+### Discovery Behavior
+
+| Scenario | Behavior |
+|----------|----------|
+| Exactly one EEEF:268A COM port found | Uses that port automatically |
+| Zero EEEF:268A COM ports found | Exits with error: "No EEEF:268A screen controller COM port found. Use --port COMx to specify manually." |
+| Multiple EEEF:268A COM ports found | Exits with error listing candidates: "Multiple EEEF:268A COM ports found: COM3, COM5. Specify --port explicitly." |
+| Keyboard device (0C45:800A) present | Ignored (not the target) |
+| Unrelated USB serial devices | Ignored |
+
+### Discovery-Only Mode
+
+`--detect-port` performs discovery and prints only the resolved COM port to stdout on success,
+then exits with code 0. It does **not** load the payload, create the transport, or send any data.
+
+### Safety Notes
+
+- The hard-coded `COM8` default has been removed. The runtime never silently falls back to COM8.
+- The keyboard device VID:PID 0C45:800A is explicitly excluded from discovery.
+- Discovery uses PowerShell `Get-CimInstance` against `Win32_PnPEntity` with `-NoProfile -NonInteractive`.
+- All tests are offline with mocked inventory; no COM port is opened during testing.
+
 ## Tooling: USB Device Attribution Utility
 
 `scripts/research/l99_usb_device_attribution.py` is a deterministic offline utility that
@@ -515,13 +568,27 @@ Do not imply that third-party firmware or artwork is licensed by this repository
 
 ## Current verified capabilities
 
-- Wired Raw Input attribution for VID 0C45 / PID 800A / MI_00
-- make-code-based screen Numpad mapping
-- Num Lock-independent mapping design
-- deterministic short/hold state machine
-- dry-run provider architecture
-- official UI widget crosswalk for icon, GIF, keyboard-key, page and variable concepts
+- Wired Raw Input attribution for VID 0C45 / PID 800A / MI_00 (verified; device-selection defect fixed so MI_00 is used)
+- Bitfocus Companion v5.1.3 endpoint verified on localhost (POST /api/location/1/0/0/press returns HTTP 200); physical Companion E2E still pending
+- Offline Page 21 UI prototype exists (320x480, 17 action zones, return codes 0x0030–0x0040)
+- Deterministic RGB565 export exists (320x480, 307200 bytes, SHA-256 524b0dcd...); offline framebuffer conversion only
+- Ubuntu REA automated full-firmware analysis pipeline operational (V1–V6); V6 has a local display-path call graph (0x600315D0 → 0x60049D98, STRONG_INFERENCE); host-to-display chain remains incomplete
+- Full Firmware RE V7 planned (Indirect Entry / Address-Taken / Pointer-Table Audit), not started
 - no claim that modified firmware has been safely flashed
+
+## V9.2 validated collector status
+
+V9.2 validates bounded evidence collectors only — not a confirmed LCD runtime display handler.
+
+- Session A computed-call collector (`V92ComputedCallCollector.java`): FIX_A_PASS; final SHA-256 `5F8E9E244F563AF18A243388E1BD50AD87EF3B65591BAD9C7B7B9F54A24835BF`; real Ghidra 12.1.4 validation passed; 9 call sites, 4 pointer cells
+- Session B shared-state collector (`V92SharedStateCollector.java`): FIX_B_PASS_ON_DISPOSABLE_PROJECT (superseding FIX_B_PROJECT_INTEGRITY_FAILED); final SHA-256 `F256C3593C45F3684CB49DE506BC64C29F57EE37C5E39C4707AB1D391BEF22C6`; validated against a disposable full project copy after the original-project integrity incident
+- Session C boundary collector (`V92BoundaryCollector.java`): FIX_C_PASS; final SHA-256 `56745F0A0B5898D549DBCDAE6A812F1778817A4208596AD8D8D19B785EF0A17E`; target `0x60049B90`; classification INSUFFICIENT_EVIDENCE (valid research result, not an execution failure)
+
+Current research verdict: INSUFFICIENT_EVIDENCE. V9.2 has validated the bounded evidence collectors but has not established a confirmed LCD runtime display handler.
+
+The validated collectors are distinct from the unvalidated final runtime package. The current integration package and ZIP were built before the final A/B/C collector fixes and must not be treated as runtime-ready. The immediate next step is to rebuild the integration package using the final validated A/B/C collectors and fix `run_v9_2.sh` (use `-process`, `-noanalysis`, `-readOnly`, pass `-scriptPath` separately, pass collector script name to `-postScript`, pass the output JSON path argument, use isolated Java script directories, scan the actual combined Ghidra log, publish every final deterministic artifact).
+
+See `docs/PROJECT_HANDOVER.md` for detailed continuity, checkpoint information, A/B/C validation outcomes, exact remaining package-runner defects, Windows integration source locations, and REA evidence locations.
 
 ## Evidence and provenance
 
