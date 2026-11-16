@@ -2,6 +2,160 @@
 
 ## Unreleased
 
+### End-of-day documentation consolidation (2026-11-15)
+
+#### Physical Raw Input (VERIFIED)
+- Keyboard identity: VID 0C45, PID 800A, Raw Input interface MI_00.
+- MI_01&Col03 observed but NOT the verified Mini Numpad keyboard-input path.
+- Mini Numpad 1: make_code 79/0x4F, vkey 97/0x61, key down then key up, is_repeat false, reproduced multiple times.
+- Device-selection defect: find_target_device previously selected first device matching only VID/PID; both MI_00 and MI_01&Col03 expose 0C45:800A, so enumeration order could select MI_01&Col03. Updated so AULA L99 0C45:800A uses MI_00. Focused device-selection tests passed.
+
+#### Bridge runtime diagnostics (REJECTED / superseded)
+- Earlier claim "normal mode never receives WM_INPUT" is REJECTED / superseded.
+- Latest normal-mode diagnostics prove normal mode: RegisterClassW, CreateWindowExW, non-zero HWND, RAWINPUTDEVICE (usage_page 0x01, usage 0x06, flags 0x100), RegisterRawInputDevices, message loop, WM_INPUT, process_raw_input, resolves RIDI_DEVICENAME as VID_0C45&PID_800A&MI_00, matches MI_00, matches 0C45:800A.
+- Latest sample reached a key mapping decision for vkey 0x11 / make_code 0x1D (not Mini Numpad 1).
+- Final physical production path NOT yet verified. Controlled one-key test pending (Mini Numpad 1 → vkey 0x61 / make_code 0x4F → numpad_1 → short_press → one Companion HTTP 200).
+
+#### Companion v5.1.3 (VERIFIED offline)
+- Bitfocus Companion v5.1.3, binding 127.0.0.1:8000, harmless AULA TEST button at UI location 1/1/1.
+- Prepared mapping: numpad_1, page 1, row 0, column 0.
+- Verified endpoint: POST http://127.0.0.1:8000/api/location/1/0/0/press returns HTTP 200 via manual PowerShell POST.
+- CompanionDispatchWorker: bounded capacity 8, hold suppressed, secondary_hold suppressed, queue overflow protection works. Previous queue_size test failure was a test timing/expectation defect; production worker did not require a queue-size logic fix.
+- Physical Companion E2E still UNVERIFIED.
+
+#### Page 21 UI (offline, ACCEPTED_WITH_LIMITATIONS)
+- Offline 320x480 Stream Deck prototype, 17 action zones, return codes 0x0030–0x0040.
+- Home/Back: return_code 0x0020, goto_page 1. Home rectangle coordinates UNKNOWN; 17 action zones not physically proven non-overlapping with Home.
+
+#### RGB565 export (VERIFIED, RGB565_EXPORT_ACCEPTED)
+- 320x480, 307200 bytes raw RGB565. SHA256: 524b0dcd866d1554586e599b9767e06f6e8ab56eff728baae43e17684c58d304.
+- Determinism PASS (two independent in-memory conversions identical). Max per-channel error 7, mean 2.9973. 7 focused tests passed.
+- Proves deterministic offline framebuffer conversion only; NOT firmware resource compatibility, ARGB4444 replacement safety, runtime LCD framebuffer control, flash-update checksum correctness, or safe physical LCD deployment.
+
+#### Win32 Photo Frame transport (READY_FOR_CONTROLLED_PHYSICAL_TEST)
+- Corrections: partial-write continuation, zero-byte write rejection, targeted CancelIoEx cancellation, completion drain, pending-read cleanup, native-buffer lifetime handling, duplicate-write prevention.
+- 38 focused transport tests passed through injected Win32 API boundary.
+- Software-side readiness only; physical throughput UNVERIFIED. Future physical test must dynamically resolve EEEF:268A COM port (no hard-coded COM3/COM8).
+- Custom white Photo Frame image previously displayed via slower custom upload path = verified Photo Frame upload capability, NOT runtime framebuffer control.
+
+#### USB attribution (corrected)
+- Keyboard 0C45:800A; Screen EEEF:268A. Validated capture correctly attributed LCD screen device and separated from unrelated Realtek bulk traffic.
+- Normal Mini Numpad and Photo Frame navigation did NOT expose verified screen-CDC runtime-control stream.
+- Third-party Levetop evidence magic 5A A5 / write opcode 0x10 is THIRD-PARTY REFERENCE ONLY, unverified on user-unit traffic.
+
+#### Ubuntu REA
+- Remote reauser@10.1.0.107, host rea, root /home/reauser/rea-lab, Ghidra 12.1.4, OpenJDK 21, MCORE:LE:32:default.
+- Firmware /home/reauser/rea-lab/transfer/HFD_Code_V2.3.bin, 313652 bytes, SHA-256 a76806ada9648d2672bbebead8a9bb396c0bc6f3a0a071e22e99001ac3359d03.
+- Bulk firmware extraction must be deterministic and run directly on Ubuntu REA VM; Coding Agents for bounded interpretation/implementation/tests/docs only.
+
+#### Full Firmware RE V1–V6
+- V1: SUCCESS/PASS, ~73s, 1 function, 242 call graph rows, 760 external memory references, canonical edge oracle PASS. Default raw-binary Ghidra discovery insufficient.
+- V2: SUCCESS/PASS, ~90s, 4 recovery rounds, 190 seeds discovered, 183 attempted, 107 functions.
+- V3: SUCCESS/PASS, ~94s, 7 rounds, 193 seeds, ~118 functions, 33224 decoded bytes, 0.105926 decoded fraction, 118 decompile success / 0 failed. call_graph.csv zero useful edges; call-graph extraction defect exposed.
+- V4: AUDIT_COMPLETE_WITH_LIMITATIONS / PASS. 118 functions, 193 seeds, 0 call graph rows, 769 memory refs, 8002 function-body covered bytes, 103 gaps, 76 seed non-function outcomes. Gaps not proven code gaps.
+- V5: SUCCESS/PASS. Canonical raw-byte edge evidence valid; 0 new literal-call candidates; 76 unresolved seed rows; logs insufficient for proper MCore call graph.
+- V6 Combined: SUCCESS/PASS, ~94s, 193 seeds, 193 attempted, 8 rounds, 117 functions, 33224 decoded bytes, 584 call edges, 0 unresolved calls, 770 memory refs, 118 decompile success / 0 failed. Call-graph extraction layer repaired. Canonical edge 0x600315D0 → 0x60049D98 (jsri 0x60031620, literal pool 0x60031620, LITERAL_BACKED_JSRI, STRONG_INFERENCE) confirmed in call_graph.csv and oracle.json. Downstream calls from 0x60049D98 toward 0x60036D04, 0x600414A0, 0x60049E50, 0x60049B90, 0x60047778. 0x600315D0 has zero recovered incoming call edges; no host-facing parser/dispatcher upstream. DISPLAY_PATH_ONLY.
+
+#### Corrections / rejected hypotheses (REJECTED)
+- 0x81D000 as confirmed framebuffer address.
+- 0x81BCxx as confirmed LCD MMIO.
+- 0x81E36D as confirmed display address.
+- 0x800897 / 0x800898 / 0x800899 as confirmed display addresses.
+- 0x60031620/24/28/30 as four caller functions (they are literal-pool DATA).
+- Batch 4 four-target display path.
+- Photo Frame upload as runtime framebuffer control.
+- Third-party 5A A5 / opcode 0x10 as verified user-unit traffic.
+- Normal Bridge never receiving WM_INPUT.
+
+#### Process / token lessons
+- Bulk firmware extraction → Ubuntu REA scripts; Coding Agent → bounded implementation/review/tests/docs (~10K–20K tokens).
+- Preserve per-edge evidence: source VA, raw instruction, literal-pool VA, resolved target, edge type, confidence.
+- Literal-pool data is not a function. Scan-window address is not a true call instruction source. Pipeline PASS does not verify a hypothesis. Negative evidence is valid.
+
+#### Remaining blockers
+- Companion: final one-key physical E2E test (Mini Numpad 1 → vkey 0x61 → make_code 0x4F → numpad_1 → short_press → one HTTP 200).
+- LCD UI: safe deployment method, resource-format compatibility, ARGB4444 safety, checksum handling, runtime LCD write path.
+- Win32 Photo Frame: controlled physical speed/robustness test vs dynamically enumerated EEEF:268A COM port.
+- Firmware RE: host-facing input path into 0x600315D0 missing; V7 next.
+
+#### Next planned task
+- Full Firmware RE V7 (Indirect Entry / Address-Taken / Pointer-Table Audit) on Ubuntu REA, starting from V6 artifacts.
+
+### Full Firmware RE V7/V7.1 (2026-11-16)
+
+#### Initial V7 execution (SUCCESS/PASS; audit trail, partially superseded)
+- Full Firmware RE V7 executed on Ubuntu REA starting from V6 artifacts.
+- Execution: SUCCESS. Pipeline acceptance: PASS.
+- Target: 0x600315D0.
+- Aligned LE32 pointer hits to 0x600315D0: 0.
+- Contiguous pointer-table candidates containing 0x600315D0: 0.
+- Direct incoming V6 edges to 0x600315D0: 0.
+- Initial reported zero-incoming roots: 584; recovered function inventory: 0 — SUPERSEDED by V7.1, not accepted as research results.
+- Root cause of the accounting issue: graph calculation used source_instruction instead of source_function; V6 functions.csv was not loaded successfully; call-site instruction addresses were incorrectly treated as graph-source nodes. The reported 584 roots closely reflected the V6 call-edge count rather than a valid recovered-function root count.
+- Initial V7 is not recorded as a total failure: no aligned LE32 pointer, no contiguous pointer-table candidate, and no direct incoming V6 edge to 0x600315D0 were found, and these negative findings remain valid.
+
+#### Corrected V7.1 result (current accepted firmware-analysis checkpoint)
+- Full Firmware RE V7.1: Execution SUCCESS, Pipeline acceptance PASS, JSON validation PASS.
+- Target: 0x600315D0.
+- Recovered function inventory: 118.
+- Zero-incoming recovered-function roots: 42.
+- Unresolved source sites: 368.
+- Evidence-backed non-function seed candidates: 390.
+- Aligned LE32 pointer hits to 0x600315D0: 0.
+- Contiguous pointer-table candidates containing 0x600315D0: 0.
+- Direct incoming V6 edges to 0x600315D0: 0.
+- V7.1 corrected the accounting by: using source_function for function-level graph construction; retaining source_instruction as instruction-site evidence; explicitly loading V6 functions.csv; recognizing the function inventory columns function_va, end_exclusive, body_bytes; separating rows with blank source_function into unresolved source sites; separating recovered-function roots from non-function seed candidates.
+
+#### Accepted research conclusion
+- No aligned absolute little-endian 32-bit pointer or contiguous pointer-table evidence was found for indirect entry into 0x600315D0.
+- Execution verdict: SUCCESS / PASS.
+- Bounded target-pointer verdict: NO_ALIGNED_ABSOLUTE_POINTER_EVIDENCE.
+- Overall target-entry conclusion: INDIRECT_ENTRY_NOT_ESTABLISHED.
+- Negative evidence is valid only within the tested scope. A raw pointer is not a call; a pointer-table candidate is not runtime reachability.
+- V7.1 did not eliminate: unaligned pointers, relative pointers or offsets, encoded pointers, split-immediate address construction, runtime-populated RAM dispatch tables, computed branch targets, interrupt or callback entry, branch or fall-through reachability, and state-machine dispatch that does not materialize the complete absolute address.
+- Pipeline PASS is not proof of the complete research hypothesis.
+
+#### Evidence limitations
+- 42 zero-incoming recovered-function roots are static investigation candidates, not 42 proven runtime entry points. They may include image entry points, interrupt handlers, callback handlers, indirectly reached functions, and roots caused by incomplete recovery.
+- 368 unresolved source sites are evidence-backed call-edge source instructions for which V6 did not recover a source_function attribution. They are not automatically separate functions.
+- 390 evidence-backed non-function seed candidates are conservative candidates derived from unresolved source sites and graph targets absent from the recovered function inventory. They are not confirmed functions, callers, missing functions, or code regions.
+
+#### Canonical V6 evidence preserved
+- source instruction 0x600315D0, source function 0x600315D0, raw word 0x7F14, instruction jsri 0x60031620, literal pool 0x60031620, resolved target 0x60049D98, edge type LITERAL_BACKED_JSRI, confidence STRONG_INFERENCE.
+- 0x600315D0 has zero recovered direct incoming V6 call edges. No USB, CDC, HID, UART, packet-parser, or other host-facing node has been connected upstream to 0x600315D0. The exact missing firmware-side edge remains: host-facing input/parser/dispatcher -> 0x600315D0. Confirmed firmware evidence remains display-path evidence only; the host-facing upstream remains unknown.
+
+#### Next bounded phase (proposed, not executed)
+- Full Firmware RE V7.2: Target-Proximity and Root-Triage Audit — proposed scope triages the 42 zero-incoming roots, the 368 unresolved source sites, bounded branch-span and fall-through evidence around 0x600315D0, and whether 0x600315D0 lies inside another recovered function range.
+- V7.1 is complete. V1 through V7.1 do not need to be rerun. V7.2 is proposed but has not been executed. V8 direction remains undecided pending bounded V7.2 evidence.
+
+#### Confirmation
+- No firmware flashing or screen write was performed. Firmware work remains read-only.
+
+### Session A evidence consolidation (2026-11-15)
+
+#### ADDED
+- Raw Input: RID_DEVICE_INFO union defect identified; VID/PID parsed from RIDI_DEVICENAME; physical AULA L99 attribution verified (VID 0C45, PID 800A, MI_00); NumPad 1 and Home/Back physically verified; 41 focused tests passed.
+- Companion: WidgetDispatchAdapter hold and secondary_hold suppression fixed; 74 focused tests passed; live-test configuration prepared; live HTTP end-to-end test NOT performed.
+- Page 21 UI: offline 320x480 Stream Deck prototype generated; 17 logical zones mapped to 0x0030–0x0040; Home navigation record preserved; exact Home rectangle unverified; physical LCD deployment blocked.
+- Win32 transport: partial-write continuation implemented; zero-byte write rejected; CancelIoEx cancellation and completion drain added; 38 focused tests passed; physical speed test NOT performed.
+- USB capture: EEEF:268A attributed to USB bus 2, device 13 in validated captures; Mini Numpad and Photo Frame navigation produced no observed screen CDC runtime traffic; unrelated Realtek bulk traffic not attributed to the LCD.
+- Ubuntu REA: HFD_Code_V2.3.bin verified (313652 bytes, SHA-256 a76806ad...); Batch 1 SUCCESS/PASS/INCONCLUSIVE; Batch 2 SUCCESS/PASS/PARTIAL_CHAIN; Batch 3 DISPLAY STRONG_INFERENCE at 0x60049D98, MEMORY_HELPER VERIFIED at 0x60049B90 and 0x60047778, 0x600315D0→0x60049D98 NOT CONFIRMED; Batch 4 reached acceptance but FAILED, DISPATCHER_TO_DISPLAY_PATH NOT ACCEPTED, manifest not generated, verdict INCONCLUSIVE pending artifact audit.
+
+#### REJECTED CLAIMS (do not record as verified)
+- Batch 4 DISPATCHER_TO_DISPLAY_PATH.
+- 0x600315D0 → 0x60049D98 path.
+- 0x81D000 and 0x81BCxx as confirmed display addresses.
+- Photo Frame upload as runtime framebuffer control.
+
+#### BLOCKERS
+- Live Companion HTTP end-to-end test not performed; exact Page 21 Home rectangle unverified; physical LCD deployment blocked; Win32 physical speed test not performed; Batch 4 artifact audit pending.
+
+#### NEXT PLANNED TASKS
+1. Audit Batch 4 false path attribution.
+2. Controlled Mini Numpad to Companion live test.
+3. Controlled EEEF:268A Win32 physical speed test.
+4. Resolve safe LCD deployment for the Page 21 UI prototype.
+
 ### Companion Windows Bridge opt-in integration (final companion bridge documentation)
 
 #### ADDED
