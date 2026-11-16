@@ -1,0 +1,65 @@
+{
+  "schema_version": "v9.2-package-1.0",
+  "ghidra_home": "/home/reauser/rea-lab/apps/ghidra_12.1.4_PUBLIC",
+  "firmware_path": "/home/reauser/rea-lab/transfer/HFD_Code_V2.3.bin",
+  "firmware_size": 313652,
+  "firmware_sha256": "a76806ada9648d2672bbebead8a9bb396c0bc6f3a0a071e22e99001ac3359d03",
+  "v8_directory": "/home/reauser/rea-lab/work/full_firmware_re_v8",
+  "v9_directory": "/home/reauser/rea-lab/work/full_firmware_re_v9",
+  "v9_1_directory": "/home/reauser/rea-lab/work/full_firmware_re_v9_1",
+  "validated_project_root": "/home/reauser/rea-lab/work/aula_l99_v8_pipeline/project",
+  "project_name": "AulaL99V8",
+  "program_name": "HFD_Code_V2.3.bin",
+  "expected_language": "MCORE:LE:32:default",
+  "expected_loaded_memory_range": {
+    "loaded_start": "0x60000000",
+    "loaded_end": "0x6004C933",
+    "size_bytes": 313652
+  },
+  "final_v9_2_output_path": "/home/reauser/rea-lab/work/full_firmware_re_v9_2",
+  "call_site_addresses": [
+    "0x60049D9C",
+    "0x60049E12",
+    "0x60049E14",
+    "0x60049E6A",
+    "0x60049EEA",
+    "0x60049EF0",
+    "0x60049F7E",
+    "0x60045016",
+    "0x60045034"
+  ],
+  "pointer_cell_addresses": [
+    "0x60049F88",
+    "0x60049F94",
+    "0x60049F98",
+    "0x600450BC"
+  ],
+  "shared_state_addresses": [
+    "0x00821528",
+    "0x600450A8",
+    "0x600450B0",
+    "0x600450B4",
+    "0x600450BC",
+    "0x0086CF28",
+    "0x0086DF28"
+  ],
+  "boundary": {
+    "target": "0x60049B90",
+    "minimum": "0x60049A90",
+    "maximum": "0x60049C90",
+    "allowed_window": "0x60049A90-0x60049C90"
+  },
+  "expected_row_counts": {
+    "call_sites": 9,
+    "pointer_cells": 4,
+    "shared_states": 7,
+    "boundary_targets": 1
+  },
+  "timeout_values": {
+    "preflight_seconds": 300,
+    "collector_seconds": 3600,
+    "validator_seconds": 300,
+    "build_seconds": 600,
+    "compare_seconds": 300
+  }
+}

@@ -1,0 +1,74 @@
+# smoke_commands.conf.example
+#
+# TEMPLATE ONLY - NOT RUNNABLE.
+#
+# This file is a documented template for D4-Run to fill with the real
+# smoke_commands.conf before running run_all_smokes.sh. Every value here is a
+# placeholder. Do not treat this file as accepted configuration. D3 does not
+# create the real smoke_commands.conf; D4-Run must generate it with exact
+# collector scripts, arguments, output JSON, validator command, and
+# output/result directories.
+#
+# Format: shell-variable assignments sourced by run_all_smokes.sh.
+#
+# The generic D4-Prep harness (run_single_smoke.sh / run_all_smokes.sh)
+# requires the following variables for each smoke (SMOKE_1 = Session A,
+# SMOKE_2 = Session B, SMOKE_3 = Session C):
+#
+#   SMOKE_N_GHIDRA_HOME      Ghidra home directory
+#   SMOKE_N_PROJECT_DIR      Ghidra project directory
+#   SMOKE_N_PROJECT_NAME     Ghidra project name
+#   SMOKE_N_PROGRAM_NAME     Ghidra program name
+#   SMOKE_N_SCRIPT_PATH      Path to analyzeHeadless postScript (collector)
+#   SMOKE_N_COLLECTOR_SCRIPT Collector script name
+#   SMOKE_N_COLLECTOR_ARGS   Arguments for collector script
+#   SMOKE_N_OUTPUT_JSON      Expected output JSON path
+#   SMOKE_N_VALIDATOR        Validator command
+#   SMOKE_N_GHIDRA_LOG       Ghidra log path
+#   SMOKE_N_RESULT_DIR       Result directory for smoke_result.json
+
+# --- Session A collector (placeholder values) ---
+SMOKE_1_GHIDRA_HOME="PLACEHOLDER_GHIDRA_HOME"
+SMOKE_1_PROJECT_DIR="PLACEHOLDER_PROJECT_DIR"
+SMOKE_1_PROJECT_NAME="PLACEHOLDER_PROJECT_NAME"
+SMOKE_1_PROGRAM_NAME="PLACEHOLDER_PROGRAM_NAME"
+SMOKE_1_SCRIPT_PATH="PLACEHOLDER_SCRIPT_PATH"
+SMOKE_1_COLLECTOR_SCRIPT="PLACEHOLDER_COLLECTOR_SCRIPT"
+SMOKE_1_COLLECTOR_ARGS="PLACEHOLDER_COLLECTOR_ARGS"
+SMOKE_1_OUTPUT_JSON="PLACEHOLDER_OUTPUT_JSON"
+SMOKE_1_VALIDATOR="PLACEHOLDER_VALIDATOR"
+SMOKE_1_GHIDRA_LOG="PLACEHOLDER_GHIDRA_LOG"
+SMOKE_1_RESULT_DIR="PLACEHOLDER_RESULT_DIR"
+
+# --- Session B collector (placeholder values) ---
+SMOKE_2_GHIDRA_HOME="PLACEHOLDER_GHIDRA_HOME"
+SMOKE_2_PROJECT_DIR="PLACEHOLDER_PROJECT_DIR"
+SMOKE_2_PROJECT_NAME="PLACEHOLDER_PROJECT_NAME"
+SMOKE_2_PROGRAM_NAME="PLACEHOLDER_PROGRAM_NAME"
+SMOKE_2_SCRIPT_PATH="PLACEHOLDER_SCRIPT_PATH"
+SMOKE_2_COLLECTOR_SCRIPT="PLACEHOLDER_COLLECTOR_SCRIPT"
+SMOKE_2_COLLECTOR_ARGS="PLACEHOLDER_COLLECTOR_ARGS"
+SMOKE_2_OUTPUT_JSON="PLACEHOLDER_OUTPUT_JSON"
+SMOKE_2_VALIDATOR="PLACEHOLDER_VALIDATOR"
+SMOKE_2_GHIDRA_LOG="PLACEHOLDER_GHIDRA_LOG"
+SMOKE_2_RESULT_DIR="PLACEHOLDER_RESULT_DIR"
+
+# --- Session C collector (placeholder values) ---
+SMOKE_3_GHIDRA_HOME="PLACEHOLDER_GHIDRA_HOME"
+SMOKE_3_PROJECT_DIR="PLACEHOLDER_PROJECT_DIR"
+SMOKE_3_PROJECT_NAME="PLACEHOLDER_PROJECT_NAME"
+SMOKE_3_PROGRAM_NAME="PLACEHOLDER_PROGRAM_NAME"
+SMOKE_3_SCRIPT_PATH="PLACEHOLDER_SCRIPT_PATH"
+SMOKE_3_COLLECTOR_SCRIPT="PLACEHOLDER_COLLECTOR_SCRIPT"
+SMOKE_3_COLLECTOR_ARGS="PLACEHOLDER_COLLECTOR_ARGS"
+SMOKE_3_OUTPUT_JSON="PLACEHOLDER_OUTPUT_JSON"
+SMOKE_3_VALIDATOR="PLACEHOLDER_VALIDATOR"
+SMOKE_3_GHIDRA_LOG="PLACEHOLDER_GHIDRA_LOG"
+SMOKE_3_RESULT_DIR="PLACEHOLDER_RESULT_DIR"
+
+# D4-Run must later fill:
+#   - exact collector script;
+#   - exact collector arguments;
+#   - output JSON;
+#   - validator command;
+#   - output/result directories.
