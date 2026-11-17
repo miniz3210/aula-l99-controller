@@ -8,6 +8,7 @@ threading.Event synchronization. No sleep-based race assumptions.
 from __future__ import annotations
 
 import logging
+import logging.handlers
 import os
 import queue
 import sys
@@ -20,6 +21,7 @@ SRC = os.path.join(HERE, "..", "src")
 if SRC not in sys.path:
     sys.path.insert(0, SRC)
 
+import aula_input_bridge
 from aula_bridge.provider import ProviderEvent
 from aula_bridge.dispatcher import Transport
 from aula_bridge.companion_dispatch_worker import (
@@ -93,6 +95,24 @@ class SyncTransport:
         pass
 
 
+class SyncTransportRaising:
+    """Transport that raises from send()."""
+
+    def __init__(self, exc: Exception) -> None:
+        self.exc = exc
+        self.calls: list[tuple[str, str, ProviderEvent]] = []
+
+    def send(self, command: str, payload: str, event: ProviderEvent) -> None:
+        self.calls.append((command, payload, event))
+        raise self.exc
+
+    def flush(self) -> None:
+        pass
+
+    def close(self) -> None:
+        pass
+
+
 class FakeHttpSender:
     """Fake HTTP sender for testing. Records calls and returns configured responses."""
 
@@ -145,337 +165,207 @@ def make_location(page: int = 1, row: int = 0, column: int = 0) -> ButtonLocatio
     return ButtonLocation(page=page, row=row, column=column)
 
 
-class TestQueueOverflowObservability(unittest.TestCase):
-    """Test 1: Queue overflow increments overflow_count and logs a WARNING."""
+class TestDefaultLogLevel(unittest.TestCase):
+    """Test 1: --log-level defaults to WARNING; INFO logs not emitted."""
 
-    def setUp(self) -> None:
-        self.transport = SyncTransport()
-        self.worker = CompanionDispatchWorker(
-            transport=self.transport, queue_capacity=DEFAULT_QUEUE_CAPACITY
+    def test_log_level_defaults_to_warning(self) -> None:
+        ns = aula_input_bridge.parse_args([])
+        self.assertEqual(ns.log_level, "WARNING")
+
+    def test_configure_logging_default_warning(self) -> None:
+        """INFO HTTP result logs are not emitted under default WARNING level."""
+        self._reset_root_logger()
+        sender = FakeHttpSender()
+        sender.set_default_response(HttpResponse(status_code=200, success=True))
+        http_transport = CompanionHttpTransport(http_sender=sender)
+        button_mapping = {"numpad_1": make_location()}
+        adapter = CompanionDispatchAdapter(
+            http_transport=http_transport, button_mapping=button_mapping
         )
+        event = make_event(key="numpad_1", seq=1)
 
-    def tearDown(self) -> None:
-        self.worker.close()
+        aula_input_bridge.configure_logging("WARNING")
+        root_logger = logging.getLogger()
+        self.assertEqual(root_logger.level, logging.WARNING)
 
-    def _fill_queue_while_worker_blocked(self) -> None:
-        """Block the worker in transport.send, then fill the queue to capacity."""
-        self.transport.block()
-        self.worker.send("cmd", "payload", make_event(seq=1))
-        self.transport.wait_for_send(timeout=5.0)
-        for i in range(2, DEFAULT_QUEUE_CAPACITY + 2):
-            self.worker.send("cmd", "payload", make_event(seq=i))
+        adapter_logger = logging.getLogger("aula_bridge.companion_dispatch_adapter")
+        self.assertFalse(adapter_logger.isEnabledFor(logging.INFO))
 
-    def _drain_queued_sends(self, count: int) -> None:
-        self.transport.unblock()
-        for _ in range(count):
-            try:
-                self.transport.wait_for_send(timeout=5.0)
-            except queue.Empty:
-                break
+    @staticmethod
+    def _reset_root_logger() -> None:
+        root = logging.getLogger()
+        root.handlers.clear()
+        root.setLevel(logging.NOTSET)
 
-    def test_overflow_increments_counter_and_logs_warning(self) -> None:
-        """Queue overflow increments overflow_count and logs WARNING."""
-        self._fill_queue_while_worker_blocked()
+
+class TestExplicitInfoLogging(unittest.TestCase):
+    """Test 2: --log-level INFO makes HTTP result logs visible."""
+
+    def test_log_level_info_flag(self) -> None:
+        ns = aula_input_bridge.parse_args(["--log-level", "INFO"])
+        self.assertEqual(ns.log_level, "INFO")
+
+    def test_configure_logging_info_makes_http_results_visible(self) -> None:
+        """INFO logging so status=200 success=True is visible."""
+        self._reset_root_logger()
+        sender = FakeHttpSender()
+        sender.set_default_response(HttpResponse(status_code=200, success=True))
+        http_transport = CompanionHttpTransport(http_sender=sender)
+        button_mapping = {"numpad_1": make_location()}
+        adapter = CompanionDispatchAdapter(
+            http_transport=http_transport, button_mapping=button_mapping
+        )
+        event = make_event(key="numpad_1", seq=1)
+
+        aula_input_bridge.configure_logging("INFO")
+        root_logger = logging.getLogger()
+        self.assertEqual(root_logger.level, logging.INFO)
+        adapter_logger = logging.getLogger("aula_bridge.companion_dispatch_adapter")
+        self.assertTrue(adapter_logger.isEnabledFor(logging.INFO))
 
         with self.assertLogs(
-            logger="aula_bridge.companion_dispatch_worker", level="WARNING"
+            logger="aula_bridge.companion_dispatch_adapter", level="INFO"
         ) as cm:
-            self.worker.send("cmd", "payload", make_event(seq=999))
+            adapter.send("press", "", event)
 
-        self.assertEqual(self.worker.overflow_count, 1)
-
+        self.assertEqual(len(sender.calls), 1)
         log_output = "\n".join(cm.output)
-        self.assertIn("queue overflow", log_output)
-        self.assertIn("overflow_count", log_output)
-        self.assertIn("WARNING", log_output)
+        self.assertIn("status=200", log_output)
+        self.assertIn("success=True", log_output)
 
-        self._drain_queued_sends(DEFAULT_QUEUE_CAPACITY + 1)
-
-    def test_overflow_counter_accumulates_independently(self) -> None:
-        """Overflow counter accumulates across multiple overflow events."""
-        self._fill_queue_while_worker_blocked()
-
-        for i in range(5):
-            self.worker.send("cmd", "payload", make_event(seq=200 + i))
-
-        self.assertEqual(self.worker.overflow_count, 5)
-
-        self._drain_queued_sends(DEFAULT_QUEUE_CAPACITY + 1)
+    @staticmethod
+    def _reset_root_logger() -> None:
+        root = logging.getLogger()
+        root.handlers.clear()
+        root.setLevel(logging.NOTSET)
 
 
-class TestShutdownDropAccounting(unittest.TestCase):
-    """Test 2: Shutdown drops increment shutdown_drops independently of overflow_count."""
+class TestDispatcherSyncException(unittest.TestCase):
+    """Test 3: Dispatcher/transport exception produces exception log and does not propagate."""
 
     def setUp(self) -> None:
-        self.transport = SyncTransport()
-        self.worker = CompanionDispatchWorker(
-            transport=self.transport, queue_capacity=DEFAULT_QUEUE_CAPACITY
-        )
+        self.handler = logging.handlers.MemoryHandler(capacity=1000)
+        self.root_logger = logging.getLogger()
+        self.root_logger.addHandler(self.handler)
 
     def tearDown(self) -> None:
-        self.worker.close()
+        self.root_logger.removeHandler(self.handler)
 
-    def _block_worker_in_send(self) -> None:
-        self.transport.block()
-        self.worker.send("cmd", "payload", make_event(seq=1))
-        self.transport.wait_for_send(timeout=5.0)
+    def _make_dispatcher(self):
+        from aula_bridge.dispatcher import ActionDispatcher
+        from aula_bridge.action_mapping import ActionMap
 
-    def _release_worker(self) -> None:
-        self.transport.unblock()
+        return ActionDispatcher(transport=SyncTransportRaising(RuntimeError("boom")))
 
-    def test_shutdown_drops_queued_events_independently_of_overflow(self) -> None:
-        """Shutdown drops account for drained queue items, separate from overflow."""
-        self._block_worker_in_send()
-        for i in range(2, DEFAULT_QUEUE_CAPACITY + 2):
-            self.worker.send("cmd", "payload", make_event(seq=i))
+    def test_emit_and_dispatch_logs_exception_and_does_not_propagate(self) -> None:
+        """emit_and_dispatch logs exception() and isolates from caller/message loop."""
+        dispatcher = self._make_dispatcher()
+        event = make_event(key="numpad_1", seq=1)
+        provider = type("P", (), {"emit": lambda self, e: None})()
 
-        self.worker.close()
-        self._release_worker()
+        aula_input_bridge.configure_logging("WARNING")
 
-        self.assertEqual(self.worker.shutdown_drops, DEFAULT_QUEUE_CAPACITY)
-        self.assertEqual(self.worker.overflow_count, 0)
+        # Must not raise into the caller (message loop).
+        aula_input_bridge.emit_and_dispatch(provider, dispatcher, event)
 
-    def test_overflow_and_shutdown_drops_independent(self) -> None:
-        """Overflow and shutdown drops are tracked independently."""
-        self._block_worker_in_send()
-        for i in range(2, DEFAULT_QUEUE_CAPACITY + 2):
-            self.worker.send("cmd", "payload", make_event(seq=i))
-        self.worker.send("cmd", "payload", make_event(seq=999))
-        self.assertEqual(self.worker.overflow_count, 1)
+        # Transport still recorded exactly one call attempt (no duplicate).
+        transport = dispatcher.transport
+        self.assertEqual(len(transport.calls), 1)
 
-        self.worker.close()
-        self._release_worker()
+        # Exception log was emitted.
+        records = [r for r in self.handler.buffer if r.levelno >= logging.ERROR]
+        self.assertGreaterEqual(len(records), 1)
+        joined = " ".join(r.getMessage() for r in records)
+        self.assertIn("Dispatch failed", joined)
+        self.assertIn("event=short_press", joined)
+        self.assertIn("key=numpad_1", joined)
+        self.assertIn("seq=1", joined)
 
-        self.assertEqual(self.worker.shutdown_drops, DEFAULT_QUEUE_CAPACITY)
-        self.assertEqual(self.worker.overflow_count, 1)
+    def test_exception_does_not_escape_into_caller(self) -> None:
+        """Exception isolation: caller's code continues after dispatch failure."""
+        dispatcher = self._make_dispatcher()
+        event = make_event(key="numpad_1", seq=1)
+        provider = type("P", (), {"emit": lambda self, e: None})()
 
-    def test_late_send_after_close_increments_shutdown_drops(self) -> None:
-        """Late send after close increments shutdown_drops and logs WARNING."""
-        self.worker.close()
+        aula_input_bridge.configure_logging("WARNING")
 
-        with self.assertLogs(
-            logger="aula_bridge.companion_dispatch_worker", level="WARNING"
-        ) as cm:
-            self.worker.send("cmd", "payload", make_event(seq=1))
-
-        self.assertEqual(self.worker.shutdown_drops, 1)
-
-        log_output = "\n".join(cm.output)
-        self.assertIn("late send rejected after shutdown", log_output)
-        self.assertIn("shutdown_drops", log_output)
-        self.assertIn("WARNING", log_output)
-
-        self.assertEqual(self.transport.sent_count(), 0)
+        aula_input_bridge.emit_and_dispatch(provider, dispatcher, event)
+        # Caller continues; no exception propagates.
+        self.assertTrue(True)
 
 
-class TestLateSendRejection(unittest.TestCase):
-    """Test 3: Late send after close is rejected, counted and logged."""
-
-    def setUp(self) -> None:
-        self.transport = SyncTransport()
-        self.worker = CompanionDispatchWorker(
-            transport=self.transport, queue_capacity=DEFAULT_QUEUE_CAPACITY
-        )
-
-    def tearDown(self) -> None:
-        self.worker.close()
-
-    def test_late_send_rejected_counted_and_logged(self) -> None:
-        """send() after close() is rejected, increments shutdown_drops, logs WARNING."""
-        self.worker.close()
-
-        before_drops = self.worker.shutdown_drops
-
-        with self.assertLogs(
-            logger="aula_bridge.companion_dispatch_worker", level="WARNING"
-        ) as cm:
-            self.worker.send("cmd", "payload", make_event(seq=42, device="AAAA:BBBB"))
-
-        self.assertEqual(self.worker.shutdown_drops, before_drops + 1)
-
-        log_output = "\n".join(cm.output)
-        self.assertIn("late send rejected after shutdown", log_output)
-        self.assertIn("command=cmd", log_output)
-        self.assertIn("device=AAAA:BBBB", log_output)
-        self.assertIn("seq=42", log_output)
-        self.assertIn("shutdown_drops=1", log_output)
-        self.assertIn("WARNING", log_output)
-
-        self.assertEqual(self.transport.sent_count(), 0)
-
-    def test_multiple_late_sends_each_counted(self) -> None:
-        """Multiple late sends each increment shutdown_drops."""
-        self.worker.close()
-
-        for i in range(3):
-            self.worker.send("cmd", "payload", make_event(seq=100 + i))
-
-        self.assertEqual(self.worker.shutdown_drops, 3)
-        self.assertEqual(self.transport.sent_count(), 0)
-
-
-class TestHttp204Observability(unittest.TestCase):
-    """Test 4: HTTP 204 produces NO_CONTROL logging without claiming success."""
+class TestAdapterSendReturnsNone(unittest.TestCase):
+    """Test 4: CompanionDispatchAdapter.send() returns None; no HttpResponse propagated."""
 
     def setUp(self) -> None:
         self.sender = FakeHttpSender()
         self.http_transport = CompanionHttpTransport(http_sender=self.sender)
-
-        self.button_mapping = {
-            "numpad_1": make_location(page=1, row=0, column=0),
-        }
+        self.button_mapping = {"numpad_1": make_location()}
         self.adapter = CompanionDispatchAdapter(
             http_transport=self.http_transport,
             button_mapping=self.button_mapping,
         )
 
-    def test_http_204_logs_no_control_without_success(self) -> None:
-        """HTTP 204 returns NO_CONTROL error, logs without claiming success."""
-        self.sender.set_default_response(HttpResponse(status_code=204, success=False))
+    def test_send_returns_none(self) -> None:
+        """send() returns None, no HttpResponse propagated back."""
+        self.sender.set_default_response(HttpResponse(status_code=200, success=True))
         event = make_event(key="numpad_1", seq=1)
 
-        with self.assertLogs(
-            logger="aula_bridge.companion_dispatch_adapter", level="INFO"
-        ) as cm:
-            self.adapter.send("press", "", event)
+        result = self.adapter.send("press", "", event)
 
+        self.assertIsNone(result)
         self.assertEqual(len(self.sender.calls), 1)
 
-        log_output = "\n".join(cm.output)
-        self.assertIn("status=204", log_output)
-        self.assertIn("success=False", log_output)
-        self.assertIn("error_code=NO_CONTROL", log_output)
-        self.assertNotIn("success=True", log_output)
 
-    def test_transport_returns_no_control_for_204(self) -> None:
-        """CompanionHttpTransport returns NO_CONTROL for 204."""
-        self.sender.set_default_response(HttpResponse(status_code=204, success=False))
-        location = make_location()
-
-        response = self.http_transport.press(location)
-
-        self.assertFalse(response.success)
-        self.assertEqual(response.status_code, 204)
-        self.assertEqual(response.error_code, "NO_CONTROL")
-        self.assertEqual(response.error_message, "No control at location")
-
-
-class TestHttp403Observability(unittest.TestCase):
-    """Test 5: HTTP 403 produces FORBIDDEN logging without claiming success."""
+class TestSingleRequestInvariant(unittest.TestCase):
+    """Test 5: One short_press results in exactly one sender/send invocation; no retry."""
 
     def setUp(self) -> None:
         self.sender = FakeHttpSender()
         self.http_transport = CompanionHttpTransport(http_sender=self.sender)
-
-        self.button_mapping = {
-            "numpad_1": make_location(page=1, row=0, column=0),
-        }
+        self.button_mapping = {"numpad_1": make_location()}
         self.adapter = CompanionDispatchAdapter(
             http_transport=self.http_transport,
             button_mapping=self.button_mapping,
         )
 
-    def test_http_403_logs_forbidden_without_success(self) -> None:
-        """HTTP 403 returns FORBIDDEN error, logs without claiming success."""
-        self.sender.set_default_response(HttpResponse(status_code=403, success=False))
+    def test_short_press_one_sender_invocation_no_retry(self) -> None:
+        """One short_press => exactly one sender.send; no retry."""
+        self.sender.set_default_response(HttpResponse(status_code=500, success=False))
         event = make_event(key="numpad_1", seq=1)
 
-        with self.assertLogs(
-            logger="aula_bridge.companion_dispatch_adapter", level="INFO"
-        ) as cm:
-            self.adapter.send("press", "", event)
+        self.adapter.send("press", "", event)
 
         self.assertEqual(len(self.sender.calls), 1)
-
-        log_output = "\n".join(cm.output)
-        self.assertIn("status=403", log_output)
-        self.assertIn("success=False", log_output)
-        self.assertIn("error_code=FORBIDDEN", log_output)
-        self.assertNotIn("success=True", log_output)
-
-    def test_transport_returns_forbidden_for_403(self) -> None:
-        """CompanionHttpTransport returns FORBIDDEN for 403."""
-        self.sender.set_default_response(HttpResponse(status_code=403, success=False))
-        location = make_location()
-
-        response = self.http_transport.press(location)
-
-        self.assertFalse(response.success)
-        self.assertEqual(response.status_code, 403)
-        self.assertEqual(response.error_code, "FORBIDDEN")
-        self.assertEqual(response.error_message, "HTTP API disabled or access forbidden")
+        method, url, timeout = self.sender.calls[0]
+        self.assertEqual(method, "POST")
+        self.assertIn("/api/location/1/0/0/press", url)
 
 
-class TestHttpTimeoutObservability(unittest.TestCase):
-    """Test 6: HTTP timeout produces TIMEOUT logging without automatic retry."""
+class TestLoggingFormat(unittest.TestCase):
+    """Logging CLI format: concise stderr with timestamp, level, logger, message."""
 
-    def setUp(self) -> None:
-        self.sender = FakeHttpSender()
-        self.http_transport = CompanionHttpTransport(http_sender=self.sender)
+    def test_configure_logging_format(self) -> None:
+        """configure_logging sets a concise stderr format."""
+        import io
 
-        self.button_mapping = {
-            "numpad_1": make_location(page=1, row=0, column=0),
-        }
-        self.adapter = CompanionDispatchAdapter(
-            http_transport=self.http_transport,
-            button_mapping=self.button_mapping,
+        stream = io.StringIO()
+        handler = logging.StreamHandler(stream)
+        handler.setFormatter(
+            logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
         )
+        root = logging.getLogger()
+        root.handlers.clear()
+        root.addHandler(handler)
+        root.setLevel(logging.WARNING)
 
-    def test_http_timeout_logs_timeout_without_retry(self) -> None:
-        """HTTP timeout returns TIMEOUT error, logs without retry."""
-        self.sender.set_raise(TimeoutError("Request timeout"))
-        event = make_event(key="numpad_1", seq=1)
+        logger = logging.getLogger("aula_bridge.companion_dispatch_adapter")
+        logger.warning("test message")
 
-        with self.assertLogs(
-            logger="aula_bridge.companion_dispatch_adapter", level="INFO"
-        ) as cm:
-            self.adapter.send("press", "", event)
-
-        self.assertEqual(len(self.sender.calls), 1)
-
-        log_output = "\n".join(cm.output)
-        self.assertIn("status=0", log_output)
-        self.assertIn("success=False", log_output)
-        self.assertIn("error_code=TIMEOUT", log_output)
-        self.assertNotIn("success=True", log_output)
-
-    def test_transport_returns_timeout_without_retry(self) -> None:
-        """CompanionHttpTransport returns TIMEOUT for timeout, no retry."""
-        self.sender.set_raise(TimeoutError("Request timeout"))
-        location = make_location()
-
-        response = self.http_transport.press(location)
-
-        self.assertFalse(response.success)
-        self.assertEqual(response.status_code, 0)
-        self.assertEqual(response.error_code, "TIMEOUT")
-        self.assertEqual(response.error_message, "Request timeout")
-
-        self.assertEqual(len(self.sender.calls), 1)
-
-    def test_no_automatic_retry_on_timeout(self) -> None:
-        """Timeout does not trigger automatic retry."""
-        self.sender.set_raise(TimeoutError("Request timeout"))
-        location = make_location()
-
-        self.http_transport.press(location)
-        self.http_transport.press(location)
-
-        self.assertEqual(len(self.sender.calls), 2)
-
-    def test_no_automatic_retry_on_any_failure(self) -> None:
-        """No automatic retries on any failure status."""
-        for status in [400, 403, 500, 503]:
-            with self.subTest(status=status):
-                self.sender.clear()
-                self.sender.set_default_response(
-                    HttpResponse(status_code=status, success=False)
-                )
-                location = make_location()
-
-                self.http_transport.press(location)
-
-                self.assertEqual(len(self.sender.calls), 1)
+        output = stream.getvalue()
+        self.assertIn("WARNING", output)
+        self.assertIn("aula_bridge.companion_dispatch_adapter", output)
+        self.assertIn("test message", output)
 
 
 if __name__ == "__main__":

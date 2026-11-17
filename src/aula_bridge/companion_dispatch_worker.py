@@ -5,8 +5,12 @@ interface. Runs exactly one worker thread with a bounded FIFO queue.
 
 No Windows Bridge integration. No Dispatcher modifications. No State Machine
 modifications. No Raw Input attribution changes. No Companion HTTP Core
-modifications. No HTTP Sender modifications. No firmware changes. No network
-requests. No documentation changes. No dependency upgrades.
+modifications. No HTTP Sender modifications. No firmware changes. No dependency
+upgrades.
+
+Live Companion dispatch is explicitly opt-in; network I/O occurs only through
+the configured live Companion sender/transport path. There are no automatic
+retries or redirects.
 """
 
 from __future__ import annotations

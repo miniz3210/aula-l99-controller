@@ -2,7 +2,11 @@
 
 The provider is the only component that performs output. This POC implements a
 single dry-run provider that writes deterministic structured JSON lines to a log
-file. No Companion requests, no USB/HID/COM/screen commands are ever sent.
+file. No USB/HID/COM/screen commands are ever sent.
+
+The provider/action mapping alone may remain pure or dry-run; live Companion
+dispatch is explicitly opt-in and network I/O occurs only through the configured
+live Companion sender/transport path. There are no automatic retries or redirects.
 
 Event schema (one JSON object per line):
   {"event":"key_down","key":"numpad_1","device":"0C45:800A"}

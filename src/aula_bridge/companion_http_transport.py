@@ -2,6 +2,10 @@
 
 Offline-testable HTTP transport with dependency-injected sender.
 No network I/O, no retries, no buffering, no background threads.
+
+The provider/action mapping alone may remain pure or dry-run; live Companion
+dispatch is explicitly opt-in and network I/O occurs only through the configured
+live Companion sender/transport path. There are no automatic retries or redirects.
 """
 
 from __future__ import annotations

@@ -19,6 +19,7 @@ import argparse
 import ctypes
 import ctypes.wintypes as wintypes
 import json
+import logging
 import os
 import signal
 import sys
@@ -50,12 +51,12 @@ from aula_bridge.companion_http_transport import CompanionHttpTransportError
 from aula_bridge.devices import (
     RAWINPUT,
     RAWINPUTDEVICE,
-    RID_DEVICE_INFO,
     RIDI_DEVICEINFO,
     RIDI_DEVICENAME,
     RIDEV_INPUTSINK,
     WM_INPUT,
     GetRawInputData,
+    parse_vid_pid_from_path,
     user32,
     kernel32,
 )
@@ -65,6 +66,15 @@ RI_KEY_BREAK = 0x0001
 RID_INPUT = 0x10000003
 PM_REMOVE = 0x0001
 CLASS_ALREADY_EXISTS = 1410
+
+LOG_LEVEL_CHOICES = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
+LOG_LEVEL_DEFAULT = "WARNING"
+
+logger = logging.getLogger(__name__)
+
+
+def _dbg(*parts):
+    print("RAWDBG:", *parts, file=sys.stderr, flush=True)
 
 HWND_MESSAGE = wintypes.HWND(-3)
 
@@ -152,11 +162,31 @@ kernel32.GetModuleHandleW.argtypes = [wintypes.LPCWSTR]
 kernel32.GetModuleHandleW.restype = wintypes.HINSTANCE
 
 
+def configure_logging(level: str = LOG_LEVEL_DEFAULT) -> None:
+    """Configure root logging once for the production entry point.
+
+    Uses a concise stderr format with timestamp, level, logger name, and
+    message. No file handler. Default WARNING preserves quiet production
+    behavior.
+    """
+    logging.basicConfig(
+        level=getattr(logging, level, logging.WARNING),
+        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+        stream=sys.stderr,
+    )
+
+
 def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="AULA L99 firmware-free Windows input bridge POC"
     )
     parser.add_argument("--config", help="Path to bridge config JSON")
+    parser.add_argument(
+        "--log-level",
+        choices=LOG_LEVEL_CHOICES,
+        default=LOG_LEVEL_DEFAULT,
+        help="Set the logging level (default: WARNING)",
+    )
     parser.add_argument(
         "--list-devices",
         action="store_true",
@@ -237,12 +267,22 @@ def capture_raw() -> int:
     line per WM_INPUT keyboard event. No VID/PID filtering, no mapping, no
     state machine, no provider, no suppression. Raw observation only.
     """
+    _dbg("CAPTURE mode diagnostics start")
+
     hinstance = kernel32.GetModuleHandleW(None)
+    _dbg("hinstance", hex(int(hinstance)))
 
     def wndproc(hwnd, msg, wparam, lparam):
-        return user32.DefWindowProcW(hwnd, msg, wparam, lparam)
+        try:
+            if msg == WM_INPUT:
+                _dbg("CAPTURE wndproc WM_INPUT hDevice via lParam", hex(int(lparam)))
+            return user32.DefWindowProcW(hwnd, msg, wparam, lparam)
+        except Exception as exc:
+            _dbg("CAPTURE wndproc exception", repr(exc))
+            raise
 
     wndproc_ptr = WNDPROC(wndproc)
+    _dbg("wndproc_ptr strong ref held", repr(wndproc_ptr))
 
     wc = WNDCLASSW()
     wc.lpfnWndProc = wndproc_ptr
@@ -250,11 +290,14 @@ def capture_raw() -> int:
     wc.lpszMenuName = None
     wc.lpszClassName = "AulaRawCaptureWindow-%d" % os.getpid()
     ctypes.set_last_error(0)
-    register_success = user32.RegisterClassW(ctypes.byref(wc)) != 0
+    register_result = user32.RegisterClassW(ctypes.byref(wc))
+    register_atom = register_result if register_result != 0 else 0
+    register_last_error = ctypes.get_last_error()
+    register_success = register_atom != 0
+    _dbg("RegisterClassW result", register_atom, "GetLastError", register_last_error, "success", register_success)
     if not register_success:
-        last_error = ctypes.get_last_error()
-        if last_error != CLASS_ALREADY_EXISTS:
-            raise OSError("RegisterClassW failed with error %d" % last_error)
+        if register_last_error != CLASS_ALREADY_EXISTS:
+            raise OSError("RegisterClassW failed with error %d" % register_last_error)
 
     hwnd = None
     class_registered_by_us = register_success
@@ -274,6 +317,8 @@ def capture_raw() -> int:
             hinstance,
             None,
         )
+        hwnd_last_error = ctypes.get_last_error()
+        _dbg("CreateWindowExW result hwnd", hex(int(hwnd)) if hwnd else None, "GetLastError", hwnd_last_error)
         if not hwnd:
             raise OSError("CreateWindowExW failed")
 
@@ -282,8 +327,12 @@ def capture_raw() -> int:
         rid.usUsage = wintypes.USHORT(0x06)
         rid.dwFlags = wintypes.DWORD(RIDEV_INPUTSINK)
         rid.hwndTarget = hwnd
+        _dbg("RAWINPUTDEVICE usage_page", hex(rid.usUsagePage), "usage", hex(rid.usUsage), "flags", hex(rid.dwFlags), "hwndTarget", hex(int(rid.hwndTarget)))
 
-        if not user32.RegisterRawInputDevices(ctypes.byref(rid), 1, ctypes.sizeof(rid)):
+        rid_result = user32.RegisterRawInputDevices(ctypes.byref(rid), 1, ctypes.sizeof(rid))
+        rid_last_error = ctypes.get_last_error()
+        _dbg("RegisterRawInputDevices result", rid_result, "GetLastError", rid_last_error)
+        if not rid_result:
             raise OSError("RegisterRawInputDevices failed")
 
         device_cache: Dict[int, Optional[str]] = {}
@@ -327,10 +376,12 @@ def capture_raw() -> int:
 
         signal.signal(signal.SIGINT, handle_signal)
 
+        _dbg("CAPTURE entering message loop")
         while running:
             msg = wintypes.MSG()
             while user32.PeekMessageW(ctypes.byref(msg), None, 0, 0, PM_REMOVE):
                 if msg.message == WM_INPUT:
+                    _dbg("CAPTURE received WM_INPUT hDevice", hex(int(msg.lParam)) if msg.lParam else None)
                     data_size = wintypes.UINT(ctypes.sizeof(RAWINPUT))
                     raw = RAWINPUT()
                     if (
@@ -349,23 +400,16 @@ def capture_raw() -> int:
                         continue
 
                     h_device = raw.header.hDevice
+                    _dbg("CAPTURE WM_INPUT hDevice", hex(int(h_device)) if h_device is not None else None)
+
                     path = device_path(h_device)
 
                     vid = None
                     pid = None
-                    if h_device is not None and int(h_device) != 0:
-                        dev_info = RID_DEVICE_INFO()
-                        dev_info.cbSize = ctypes.sizeof(RID_DEVICE_INFO)
-                        cb_size = wintypes.UINT(ctypes.sizeof(RID_DEVICE_INFO))
-                        if (
-                            user32.GetRawInputDeviceInfoW(
-                                h_device, RIDI_DEVICEINFO,
-                                ctypes.byref(dev_info), ctypes.byref(cb_size),
-                            )
-                            != -1
-                        ):
-                            vid = dev_info.hid.dwVendorId
-                            pid = dev_info.hid.dwProductId
+                    if path is not None:
+                        parsed = parse_vid_pid_from_path(path)
+                        if parsed is not None:
+                            vid, pid = parsed
 
                     entry = _process_raw_keyboard_event(raw, path, vid, pid, pressed_keys)
                     print(json.dumps(entry, separators=(",", ":"), sort_keys=False))
@@ -450,15 +494,21 @@ def emit_and_dispatch(
     """Emit event to provider first, then dispatch if supported.
 
     Provider emits first to preserve seq assignment. Dispatcher is called
-    only after successful provider emit. Dispatcher exceptions are caught
-    and isolated from the Windows message loop.
+    only after successful provider emit. Dispatcher exceptions are caught,
+    logged with exception(), and isolated from the Windows message loop.
     """
     provider.emit(event)
     if event.event in {"short_press", "hold", "secondary_hold"}:
         try:
             dispatcher.dispatch(event)
         except Exception:
-            pass
+            logger.exception(
+                "Dispatch failed: event=%s key=%s device=%s seq=%d; isolated from message loop",
+                event.event,
+                event.key,
+                event.device,
+                event.seq,
+            )
 
 
 def handle_result(provider: DryRunProvider, dispatcher: ActionDispatcher, result: PressResult) -> None:
@@ -483,66 +533,99 @@ def process_raw_input(
     dispatcher: ActionDispatcher,
 ) -> None:
     """Handle one WM_INPUT message: attribute, map, drive state machine."""
-    data_size = wintypes.UINT(ctypes.sizeof(RAWINPUT))
-    raw = RAWINPUT()
-    if (
-        GetRawInputData(
-            ctypes.cast(msg.lParam, ctypes.c_void_p),
-            RID_INPUT,
-            ctypes.byref(raw),
-            ctypes.byref(data_size),
-            ctypes.sizeof(raw.header),
-        )
-        == -1
-    ):
-        return
+    _dbg("NORMAL process_raw_input entered")
+    try:
+        data_size = wintypes.UINT(ctypes.sizeof(RAWINPUT))
+        raw = RAWINPUT()
+        if (
+            GetRawInputData(
+                ctypes.cast(msg.lParam, ctypes.c_void_p),
+                RID_INPUT,
+                ctypes.byref(raw),
+                ctypes.byref(data_size),
+                ctypes.sizeof(raw.header),
+            )
+            == -1
+        ):
+            _dbg("NORMAL process_raw_input GetRawInputData returned -1")
+            return
 
-    if raw.header.dwType != RIM_TYPEKEYBOARD:
-        return
+        if raw.header.dwType != RIM_TYPEKEYBOARD:
+            _dbg("NORMAL process_raw_input non-keyboard dwType", raw.header.dwType)
+            return
 
-    h_device = raw.header.hDevice
-    dev_info = RID_DEVICE_INFO()
-    dev_info.cbSize = ctypes.sizeof(RID_DEVICE_INFO)
-    cb_size = wintypes.UINT(ctypes.sizeof(RID_DEVICE_INFO))
-    if (
-        user32.GetRawInputDeviceInfoW(
-            h_device, RIDI_DEVICEINFO, ctypes.byref(dev_info), ctypes.byref(cb_size)
-        )
-        == -1
-    ):
-        return
+        h_device = raw.header.hDevice
+        _dbg("NORMAL process_raw_input hDevice", hex(int(h_device)) if h_device is not None else None)
 
-    vid = dev_info.hid.dwVendorId
-    pid = dev_info.hid.dwProductId
-    device = "%04X:%04X" % (vid, pid)
+        name_len = wintypes.UINT(0)
+        if (
+            user32.GetRawInputDeviceInfoW(
+                h_device, RIDI_DEVICENAME, None, ctypes.byref(name_len)
+            )
+            == -1
+            or name_len.value == 0
+        ):
+            _dbg("NORMAL process_raw_input GetRawInputDeviceInfoW name_len failed")
+            return
+        name_buf = ctypes.create_unicode_buffer(name_len.value)
+        if (
+            user32.GetRawInputDeviceInfoW(
+                h_device, RIDI_DEVICENAME, name_buf, ctypes.byref(name_len)
+            )
+            == -1
+        ):
+            _dbg("NORMAL process_raw_input GetRawInputDeviceInfoW name read failed")
+            return
 
-    if vid != config.vid or pid != config.pid:
-        return
+        _dbg("NORMAL process_raw_input device_name", name_buf.value)
+        _dbg("NORMAL process_raw_input MI_00 match", "MI_00" in name_buf.value.upper())
 
-    vkey = raw.keyboard.VKey
-    flags = raw.keyboard.Flags
-    is_break = bool(flags & RI_KEY_BREAK)
+        if "MI_00" not in name_buf.value.upper():
+            _dbg("NORMAL process_raw_input not MI_00, skipping")
+            return
 
-    key = key_map.key_for_return_value(vkey)
-    if key is None:
-        return
+        parsed = parse_vid_pid_from_path(name_buf.value)
+        if parsed is None:
+            _dbg("NORMAL process_raw_input parse_vid_pid_from_path failed")
+            return
+        vid, pid = parsed
+        device = "%04X:%04X" % (vid, pid)
+        _dbg("NORMAL process_raw_input device", device, "config vid/pid", config.vid, config.pid)
 
-    now = int(time.time() * 1000)
-    machine.set_time(now)
+        if vid != config.vid or pid != config.pid:
+            _dbg("NORMAL process_raw_input VID/PID mismatch, skipping")
+            return
 
-    if is_break:
-        for result in machine.key_up(key, device, now):
-            if result.action == "short_press":
-                emit_short_press(provider, dispatcher, key, device, result.duration_ms or 0)
-            elif result.action == "hold":
-                emit_key_up(provider, dispatcher, key, device, held=True)
-            elif result.action == "repeat_ignored":
-                emit_repeat_ignored(provider, dispatcher, key, device)
-    else:
-        emit_key_down(provider, dispatcher, key, device)
-        for result in machine.key_down(key, device, now):
-            if result.action == "repeat_ignored":
-                emit_repeat_ignored(provider, dispatcher, key, device)
+        vkey = raw.keyboard.VKey
+        flags = raw.keyboard.Flags
+        is_break = bool(flags & RI_KEY_BREAK)
+
+        key = key_map.key_for_return_value(vkey)
+        if key is None:
+            key = key_map.key_for_make_code(raw.keyboard.MakeCode, flags, vkey)
+        if key is None:
+            _dbg("NORMAL process_raw_input no key mapping for vkey", hex(vkey), "make_code", hex(raw.keyboard.MakeCode))
+            return
+
+        now = int(time.time() * 1000)
+        machine.set_time(now)
+
+        if is_break:
+            for result in machine.key_up(key, device, now):
+                if result.action == "short_press":
+                    emit_short_press(provider, dispatcher, key, device, result.duration_ms or 0)
+                elif result.action == "hold":
+                    emit_key_up(provider, dispatcher, key, device, held=True)
+                elif result.action == "repeat_ignored":
+                    emit_repeat_ignored(provider, dispatcher, key, device)
+        else:
+            emit_key_down(provider, dispatcher, key, device)
+            for result in machine.key_down(key, device, now):
+                if result.action == "repeat_ignored":
+                    emit_repeat_ignored(provider, dispatcher, key, device)
+    except Exception as exc:
+        _dbg("NORMAL process_raw_input exception", repr(exc))
+        raise
 
 
 def build_companion_transport(companion_config, mapping_path: str):
@@ -581,6 +664,9 @@ def build_companion_transport(companion_config, mapping_path: str):
 
 def main(argv: Optional[list[str]] = None) -> int:
     args = parse_args(argv)
+
+    # Configure logging once before runtime components start.
+    configure_logging(args.log_level)
 
     # Validate CLI flags
     if args.enable_companion and not args.companion_config:
@@ -671,6 +757,88 @@ def main(argv: Optional[list[str]] = None) -> int:
                 ) from init_exc
         raise
 
+    # Register keyboard Raw Input on a hidden message-only window so the
+    # normal Bridge path receives WM_INPUT (same as --capture-raw).
+    _dbg("NORMAL mode diagnostics start")
+
+    hinstance = kernel32.GetModuleHandleW(None)
+    _dbg("NORMAL hinstance", hex(int(hinstance)))
+
+    def wndproc(hwnd, msg, wparam, lparam):
+        try:
+            if msg == WM_INPUT:
+                _dbg("NORMAL wndproc WM_INPUT hDevice via lParam", hex(int(lparam)) if lparam else None)
+            return user32.DefWindowProcW(hwnd, msg, wparam, lparam)
+        except Exception as exc:
+            _dbg("NORMAL wndproc exception", repr(exc))
+            raise
+
+    wndproc_ptr = WNDPROC(wndproc)
+    _dbg("NORMAL wndproc_ptr strong ref held", repr(wndproc_ptr))
+
+    wc = WNDCLASSW()
+    wc.lpfnWndProc = wndproc_ptr
+    wc.hInstance = hinstance
+    wc.lpszMenuName = None
+    wc.lpszClassName = "AulaBridgeWindow-%d" % os.getpid()
+    ctypes.set_last_error(0)
+    register_result = user32.RegisterClassW(ctypes.byref(wc))
+    register_atom = register_result if register_result != 0 else 0
+    register_last_error = ctypes.get_last_error()
+    register_success = register_atom != 0
+    _dbg("NORMAL RegisterClassW result", register_atom, "GetLastError", register_last_error, "success", register_success)
+    if not register_success:
+        if register_last_error != CLASS_ALREADY_EXISTS:
+            raise OSError("RegisterClassW failed with error %d" % register_last_error)
+
+    hwnd = None
+    class_registered_by_us = register_success
+    try:
+        hwnd = user32.CreateWindowExW(
+            0,
+            wc.lpszClassName,
+            "AulaBridge",
+            0,
+            0,
+            0,
+            0,
+            0,
+            HWND_MESSAGE,
+            None,
+            hinstance,
+            None,
+        )
+        hwnd_last_error = ctypes.get_last_error()
+        _dbg("NORMAL CreateWindowExW result hwnd", hex(int(hwnd)) if hwnd else None, "GetLastError", hwnd_last_error)
+        if not hwnd:
+            raise OSError("CreateWindowExW failed")
+
+        rid = RAWINPUTDEVICE()
+        rid.usUsagePage = wintypes.USHORT(0x01)
+        rid.usUsage = wintypes.USHORT(0x06)
+        rid.dwFlags = wintypes.DWORD(RIDEV_INPUTSINK)
+        rid.hwndTarget = hwnd
+        _dbg("NORMAL RAWINPUTDEVICE usage_page", hex(rid.usUsagePage), "usage", hex(rid.usUsage), "flags", hex(rid.dwFlags), "hwndTarget", hex(int(rid.hwndTarget)))
+
+        rid_result = user32.RegisterRawInputDevices(ctypes.byref(rid), 1, ctypes.sizeof(rid))
+        rid_last_error = ctypes.get_last_error()
+        _dbg("NORMAL RegisterRawInputDevices result", rid_result, "GetLastError", rid_last_error)
+        if not rid_result:
+            raise OSError("RegisterRawInputDevices failed")
+
+    except Exception:
+        if hwnd is not None:
+            try:
+                user32.DestroyWindow(hwnd)
+            except OSError:
+                pass
+        if class_registered_by_us:
+            try:
+                user32.UnregisterClassW(wc.lpszClassName, hinstance)
+            except OSError:
+                pass
+        raise
+
     running = True
 
     def handle_signal(signum, frame):
@@ -684,10 +852,12 @@ def main(argv: Optional[list[str]] = None) -> int:
     print("Press Ctrl+C to stop.")
 
     try:
+        _dbg("NORMAL entering message loop")
         while running:
             msg = wintypes.MSG()
             while user32.PeekMessageW(ctypes.byref(msg), None, 0, 0, PM_REMOVE):
                 if msg.message == WM_INPUT:
+                    _dbg("NORMAL received WM_INPUT hDevice", hex(int(msg.lParam)) if msg.lParam else None)
                     process_raw_input(msg, config, key_map, machine, provider, dispatcher)
                 user32.TranslateMessage(ctypes.byref(msg))
                 user32.DispatchMessageW(ctypes.byref(msg))
@@ -710,6 +880,18 @@ def main(argv: Optional[list[str]] = None) -> int:
         provider.close()
         if dispatcher_close_error is not None:
             raise dispatcher_close_error
+
+        # Destroy the Raw Input message-only window and unregister the class.
+        if hwnd is not None:
+            try:
+                user32.DestroyWindow(hwnd)
+            except OSError:
+                pass
+        if class_registered_by_us:
+            try:
+                user32.UnregisterClassW(wc.lpszClassName, hinstance)
+            except OSError:
+                pass
 
         if worker is not None and worker.is_alive:
             # Worker.close() already reports if the worker remains alive after

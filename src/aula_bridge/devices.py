@@ -258,8 +258,10 @@ def _get_raw_input_device_info_list() -> List[RawInputDevice]:
             h_device, RIDI_DEVICENAME, name_buf, ctypes.byref(name_len)
         )
 
-        vid = rid.hid.dwVendorId
-        pid = rid.hid.dwProductId
+        parsed = parse_vid_pid_from_path(name_buf.value)
+        if parsed is None:
+            continue
+        vid, pid = parsed
 
         devices.append(
             RawInputDevice(
@@ -280,7 +282,12 @@ def enumerate_raw_input_devices() -> List[RawInputDevice]:
 
 
 def find_target_device(vid: int, pid: int) -> Optional[RawInputDevice]:
-    """Find the first Raw Input device matching the given VID/PID.
+    """Find the Raw Input device matching the given VID/PID.
+
+    For the verified AULA L99 keyboard identity (VID 0x0C45 / PID 0x800A),
+    selection requires the MI_00 interface so the verified keyboard interface
+    is chosen over other L99 interfaces such as MI_01&Col03. Other VID/PID
+    values keep the existing first-match behavior and are not affected.
 
     Returns None when no matching device is present (device not plugged in or
     not in wired HID mode). Callers must treat None as "not available" rather
@@ -288,8 +295,11 @@ def find_target_device(vid: int, pid: int) -> Optional[RawInputDevice]:
     absence in logs.
     """
     for dev in enumerate_raw_input_devices():
-        if dev.matches(vid, pid):
-            return dev
+        if not dev.matches(vid, pid):
+            continue
+        if is_l99_vid_pid(vid, pid) and "MI_00" not in dev.device_name.upper():
+            continue
+        return dev
     return None
 
 

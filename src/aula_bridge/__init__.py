@@ -2,7 +2,12 @@
 
 Firmware-free POC: Raw Input device-aware keyboard attribution, deterministic
 short/hold state machine, logical key mapping, and a provider-agnostic dry-run
-output provider. No Companion integration, no USB/HID/COM writes, no flashing.
+output provider. No USB/HID/COM writes, no flashing.
+
+The provider/action mapping alone may remain pure or dry-run; live Companion
+dispatch is explicitly opt-in and network I/O occurs only through the
+configured live Companion sender/transport path. There are no automatic
+retries or redirects.
 """
 
 from .config import BridgeConfig, load_config
@@ -10,6 +15,13 @@ from .devices import RawInputDevice, find_target_device, enumerate_raw_input_dev
 from .keymap import LogicalKeyMap, RETURN_VALUE_TO_KEY
 from .state_machine import KeyStateMachine, KeyEvent, PressResult
 from .provider import DryRunProvider
+from .windows_com_discovery import (
+    discover_com_port,
+    ComDiscoveryError,
+    NoMatchingDeviceError,
+    MultipleMatchingDevicesError,
+    InventoryAcquisitionError,
+)
 
 __all__ = [
     "BridgeConfig",
@@ -24,4 +36,9 @@ __all__ = [
     "KeyEvent",
     "PressResult",
     "DryRunProvider",
+    "discover_com_port",
+    "ComDiscoveryError",
+    "NoMatchingDeviceError",
+    "MultipleMatchingDevicesError",
+    "InventoryAcquisitionError",
 ]
