@@ -580,6 +580,29 @@ Do not imply that third-party firmware or artwork is licensed by this repository
 
 V9.2 validates bounded evidence collectors only — not a confirmed LCD runtime display handler.
 
+## AFRE Wave 2 research checkpoint documentation
+
+**Wave 2: Real Ghidra extraction completed.** Real Ghidra 12.1.4 extraction completed against canonical firmware `HFD_Code_V2.3.bin` — 313,652 bytes, SHA-256 `a76806ada9648d2672bbebead8a9bb396c0bc6f3a0a071e22e99001ac3359d03`. Full extractor determinism reported PASS. Real coverage accounting completed: firmware_bytes 313,652; mapped_bytes 313,652 (100% mapped coverage); instruction_bytes 72,070 (22.98% instruction-byte density); defined_data_bytes 8,817; undefined_bytes 232,765; overlap_bytes 0; function_owned_instruction_bytes 34,764 (48.24%); unowned_instruction_bytes 37,306. Mapped coverage is distinct from instruction coverage — 100% mapped does not mean fully analyzed; 232,765 bytes remain undefined. SQLite reconciliation integration: PARTIAL.
+
+**Accepted findings:** Page 21 schema VERIFIED (17 touch records, 19-byte descriptor schema, return codes 0x0030–0x0040, normal and pressed icon IDs verified); Corrected resource offsets VERIFIED (NumPad 1 header 0x00024CA9, payload 0x00024CAC; old offset 0x00024A81 contradicted); USB HID VERIFIED (Numpad 1 usage 0x59, Numpad 2 usage 0x5A, Numpad 3 usage 0x5B).
+
+**Limitations:** Companion PARTIAL (physical Companion E2E UNVERIFIED); HardwareMonitor PARTIAL (INI-to-HID complete dataflow UNRESOLVED); LCD Runtime research UNVERIFIED (generic runtime icon update, host-controlled widget update, dynamic Stream Deck all unverified). Static Stream Deck MVP NOT claimed as complete.
+
+#### Static Stream Deck MVP Part 2 — current status
+- 17-button manifest created.
+- Static icon preview report created.
+- Resource patch dry-run report created.
+- 49 focused tests passed.
+- companion_button_mapping.json contains 17 mappings.
+- Numpad 1/2/3 HID usages verified.
+- Remaining 14 keys require physical verification.
+- All 17 Companion locations remain provisional.
+- No hardware deployment performed.
+
+Current status: OFFLINE_MVP_COMPLETE / PHYSICAL_E2E_PENDING / DEVICE_DEPLOYMENT_NOT_AUTHORIZED
+
+See `docs/PROJECT_HANDOVER.md` section 38 for full AFRE Wave 2 research checkpoint documentation.
+
 - Session A computed-call collector (`V92ComputedCallCollector.java`): FIX_A_PASS; final SHA-256 `5F8E9E244F563AF18A243388E1BD50AD87EF3B65591BAD9C7B7B9F54A24835BF`; real Ghidra 12.1.4 validation passed; 9 call sites, 4 pointer cells
 - Session B shared-state collector (`V92SharedStateCollector.java`): FIX_B_PASS_ON_DISPOSABLE_PROJECT (superseding FIX_B_PROJECT_INTEGRITY_FAILED); final SHA-256 `F256C3593C45F3684CB49DE506BC64C29F57EE37C5E39C4707AB1D391BEF22C6`; validated against a disposable full project copy after the original-project integrity incident
 - Session C boundary collector (`V92BoundaryCollector.java`): FIX_C_PASS; final SHA-256 `56745F0A0B5898D549DBCDAE6A812F1778817A4208596AD8D8D19B785EF0A17E`; target `0x60049B90`; classification INSUFFICIENT_EVIDENCE (valid research result, not an execution failure)

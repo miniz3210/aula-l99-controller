@@ -192,8 +192,8 @@ Turn the AULA L99 keyboard's built-in 320x480 touchscreen into a Stream Deck-sty
 - Branch: main
 - Remote: miniz3210/aula-l99-controller.git
 - Current published release: v0.1.1
-- HEAD commit: `dd9c8b8` — baseline for the Windows Bridge Companion opt-in documentation checkpoint (see section 23a).
-- Working tree: `aula_input_bridge.py` modified (Companion CLI + shutdown integration); new untracked Companion production modules and tests; untracked audit reports; seven historical analysis artifacts preserved. Nothing staged; no commits created.
+- HEAD commit: `f4583f083c882a9c2feecf6111179f3b4e473ae4` (baseline for AFRE Wave 2 documentation checkpoint)
+- Working tree: `aula_input_bridge.py` modified (Companion CLI + shutdown integration); new untracked Companion production modules and tests; untracked audit reports; seven historical analysis artifacts preserved. AFRE Wave 2 staging directory present under `v9_2_staging/afre_wave2/`. Nothing staged; no commits created.
 - Local ignored research directory: tools/softce-aula-l99-research
 - Vendor binaries and extracted artifacts are local only and ignored by Git.
 
@@ -968,15 +968,133 @@ Recorded in /home/reauser/rea-lab/work/full_firmware_re_v7_1:
 - Page 21 prototype evidence and limitations preserved.
 - All rejected and superseded firmware claims preserved.
 
+## 38. AFRE Wave 2 research checkpoint documentation
+
+### 38.1 Git baseline
+- HEAD: f4583f083c882a9c2feecf6111179f3b4e473ae4
+- Branch: main
+- Pre-existing tracked modifications: `aula_input_bridge.py`, `src/aula_bridge/__init__.py`, `src/aula_bridge/companion_dispatch_worker.py`, `src/aula_bridge/companion_http_transport.py`, `src/aula_bridge/devices.py`, `src/aula_bridge/provider.py`, `tests/test_bridge_devices.py`, `tests/test_companion_runtime_observability.py`
+- Preserved unchanged: all tracked modifications and untracked files remain as-is.
+
+### 38.2 Canonical firmware and resource hashes
+- `HFD_Code_V2.3.bin`: 313,652 bytes, SHA-256 `a76806ada9648d2672bbebead8a9bb396c0bc6f3a0a071e22e99001ac3359d03`
+- `UartTFT-II_Flash.bin`: 127,599,044 bytes, SHA-256 `4cb3fa5c77eea973a2b62ca61873f071692694f4c9a1832507fe2c8c9ba582b4`
+
+### 38.3 REA environment and workspaces
+- Ubuntu REA host: rea (10.1.0.107)
+- REA user: reauser
+- REA root: /home/reauser/rea-lab
+- Ghidra: 12.1.4
+- Java: OpenJDK 21
+- Processor language: MCORE:LE:32:default
+- Canonical firmware transfer path: /home/reauser/rea-lab/transfer/HFD_Code_V2.3.bin
+- Windows repository: C:\temp\aula-l99-controller
+
+### 38.4 AFRE Wave 2 status
+
+**Wave 1:** Accepted research artifacts.
+
+**Wave 2: Real Ghidra extraction completed.**
+- Real Ghidra 12.1.4 extraction completed against canonical firmware `HFD_Code_V2.3.bin`.
+- Full extractor determinism reported PASS.
+- Real coverage accounting completed:
+  - firmware_bytes: 313,652
+  - mapped_bytes: 313,652 (100% mapped coverage)
+  - instruction_bytes: 72,070 (22.98% instruction-byte density)
+  - defined_data_bytes: 8,817
+  - undefined_bytes: 232,765
+  - overlap_bytes: 0
+  - function_owned_instruction_bytes: 34,764 (48.24%)
+  - unowned_instruction_bytes: 37,306
+- SQLite reconciliation integration: PARTIAL.
+
+### 38.5 Accepted research findings (AFRE Wave 2)
+
+#### Page 21 schema verification (VERIFIED)
+- 17 touch records verified.
+- 19-byte descriptor schema.
+- Return codes 0x0030 through 0x0040.
+- Normal and pressed icon IDs verified.
+
+#### Corrected resource offsets (VERIFIED)
+- NumPad 1 header offset: 0x00024CA9
+- NumPad 1 payload offset: 0x00024CAC
+- Old offset 0x00024A81 is contradicted.
+
+#### USB HID findings (VERIFIED)
+- Numpad 1 usage: 0x59
+- Numpad 2 usage: 0x5A
+- Numpad 3 usage: 0x5B
+
+#### Companion (PARTIAL)
+- Numpad 1 physical E2E previously verified at bridge layer only.
+- Physical Companion E2E remains UNVERIFIED.
+
+#### HardwareMonitor research (PARTIAL)
+- .NET INI writer: VERIFIED.
+- DeviceDriver INI reader: VERIFIED.
+- INI-to-HID complete dataflow: UNRESOLVED.
+
+#### LCD Runtime research (UNVERIFIED)
+- Generic runtime icon update: UNVERIFIED.
+- Host-controlled widget update: UNVERIFIED.
+- Dynamic Stream Deck: NOT COMPLETED.
+
+### 38.6 Unresolved hypotheses
+- Host-facing input/parser/dispatcher -> 0x600315D0 firmware-side edge remains missing.
+- HardwareMonitor INI-to-HID complete dataflow unresolved.
+- LCD runtime icon update unverified.
+- Host-controlled widget update unverified.
+- Dynamic Stream Deck not completed.
+- Image-level self-checksum in UartTFT-II_Flash.bin: UNKNOWN.
+- Exact UI-only package acceptance: STRONG_INFERENCE only.
+- Interrupted-write recovery behavior: UNKNOWN.
+
+### 38.7 Static Stream Deck MVP Part 2 — current status
+- 17-button manifest created.
+- Static icon preview report created.
+- Resource patch dry-run report created.
+- 49 focused tests passed.
+- companion_button_mapping.json contains 17 mappings.
+- Numpad 1/2/3 HID usages verified.
+- Remaining 14 keys require physical verification.
+- All 17 Companion locations remain provisional.
+- No hardware deployment performed.
+
+Current status: OFFLINE_MVP_COMPLETE / PHYSICAL_E2E_PENDING / DEVICE_DEPLOYMENT_NOT_AUTHORIZED
+
+Static Stream Deck MVP is NOT claimed as complete. Do not claim production readiness.
+
+### 38.8 Windows and REA workflow
+- Windows research: C:\temp\aula-l99-controller (this repository).
+- REA: /home/reauser/rea-lab on Ubuntu VM at 10.1.0.107.
+- Ghidra analysis runs on REA; coding-agent work is bounded to implementation/tests/docs.
+- Firmware transfer path: /home/reauser/rea-lab/transfer/HFD_Code_V2.3.bin (restored from Windows copy C:\temp\aula-l99-controller\fw.bin; do not claim continuous presence in Ubuntu transfer directory).
+
+### 38.9 Safety constraints
+- Firmware work remains read-only.
+- Do not press Start in either updater.
+- Do not flash either HFD_Code_V2.3.bin variant.
+- Do not write the official UartTFT-II_Flash.bin.
+- Do not enter bootloader mode solely for experimentation.
+- Do not replay upgrade traffic.
+- Do not modify updater executables.
+- No USB/COM/HID access during research.
+- No hardware writes.
+- NO-GO for hardware flashing preserved.
+
+### 38.10 Exact next development task
+Consolidate AFRE Wave 2 research checkpoint documentation across CHANGELOG.md, README.md, and docs/PROJECT_HANDOVER.md. Do not modify implementation code. Do not claim Static Stream Deck MVP completion.
+
 ## 26. Next-chat handover summary
 
-**Research Status:** All accepted checkpoints preserved. CFG and JMPI evidence stable. Offline utilities documented. Safety gates preserved.
+**Research Status:** All accepted checkpoints preserved. CFG and JMPI evidence stable. Offline utilities documented. Safety gates preserved. AFRE Wave 2 documentation finalized (extract determinism PASS, coverage accounting PASS, SQLite reconciliation PARTIAL).
 
-**Current status:** Windows Bridge Companion opt-in integration IMPLEMENTED and ACCEPTED for offline development/testing at baseline `dd9c8b8`. Live Companion behavior UNVERIFIED. Real Companion transport implemented for loopback/offline use only.
+**Current status:** Windows Bridge Companion opt-in integration IMPLEMENTED and ACCEPTED for offline development/testing at baseline `dd9c8b8`. Live Companion behavior UNVERIFIED. Real Companion transport implemented for loopback/offline use only. AFRE Wave 2 research checkpoint documentation finalized across CHANGELOG.md, README.md, and docs/PROJECT_HANDOVER.md.
 
 **Handoff Ready:** Yes - All three allowed documentation files updated, firmware identity preserved, safety constraints maintained.
 
-**Next Steps:** Run bounded live Companion acceptance on loopback; then address authentication, health check, and circuit breaker before any production consideration.
+**Next Steps:** Consolidate AFRE Wave 2 documentation complete. Address HardwareMonitor INI-to-HID dataflow, LCD runtime icon update, host-controlled widget update, dynamic Stream Deck, and controlled physical Companion E2E before considering Static Stream Deck MVP readiness.
 
 ## 15. Resume commands
 

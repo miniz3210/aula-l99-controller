@@ -2,6 +2,44 @@
 
 ## Unreleased
 
+### AFRE Wave 2 research checkpoint (2026-11-16)
+
+#### Added
+- Real Ghidra 12.1.4 extraction completed against canonical firmware `HFD_Code_V2.3.bin` — 313,652 bytes, SHA-256 `a76806ada9648d2672bbebead8a9bb396c0bc6f3a0a071e22e99001ac3359d03`
+- Full extractor determinism reported PASS
+- Real coverage accounting completed:
+  - firmware_bytes: 313,652; mapped_bytes: 313,652 (100% mapped coverage)
+  - instruction_bytes: 72,070 (22.98% instruction-byte density); defined_data_bytes: 8,817; undefined_bytes: 232,765
+  - overlap_bytes: 0
+  - function_owned_instruction_bytes: 34,764 (48.24%); unowned_instruction_bytes: 37,306
+- Page 21 schema verification VERIFIED: 17 touch records, 19-byte descriptor schema, return codes 0x0030–0x0040, normal and pressed icon IDs verified
+- Corrected resource offsets VERIFIED: NumPad 1 header offset 0x00024CA9, payload offset 0x00024CAC; old offset 0x00024A81 contradicted
+- USB HID findings VERIFIED: Numpad 1 usage 0x59, Numpad 2 usage 0x5A, Numpad 3 usage 0x5B
+
+#### Research status
+- Wave 1: Accepted research artifacts
+- Wave 2: Real Ghidra extraction completed
+- SQLite reconciliation integration: PARTIAL
+
+#### Limitations
+- Companion PARTIAL: Numpad 1 physical E2E verified at bridge layer only; Physical Companion E2E remains UNVERIFIED
+- HardwareMonitor PARTIAL: .NET INI writer VERIFIED; DeviceDriver INI reader VERIFIED; INI-to-HID complete dataflow UNRESOLVED
+- LCD Runtime research UNVERIFIED: Generic runtime icon update UNVERIFIED; Host-controlled widget update UNVERIFIED; Dynamic Stream Deck NOT COMPLETED
+- Static Stream Deck MVP NOT claimed as complete.
+
+#### Static Stream Deck MVP Part 2 — current status
+- 17-button manifest created.
+- Static icon preview report created.
+- Resource patch dry-run report created.
+- 49 focused tests passed.
+- companion_button_mapping.json contains 17 mappings.
+- Numpad 1/2/3 HID usages verified.
+- Remaining 14 keys require physical verification.
+- All 17 Companion locations remain provisional.
+- No hardware deployment performed.
+
+Current status: OFFLINE_MVP_COMPLETE / PHYSICAL_E2E_PENDING / DEVICE_DEPLOYMENT_NOT_AUTHORIZED
+
 ### AULA L99 V9.2 validated collector checkpoint (2026-11-16)
 
 #### Added
