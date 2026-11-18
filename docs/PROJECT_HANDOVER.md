@@ -2963,4 +2963,129 @@ Read-only static classification of 52 canonical unresolved indirect-flow edges:
 - `python -m pytest tests -q`: 356 passed in 12.74s (repo `tests/` suite). Full-root `pytest -q` reports external `tools/Aula_L99_Linux-main/...` collection issues outside this repository’s test scope.
 - Documentation sync modified only: `README.md`, `CHANGELOG.md`, `docs/PROJECT_HANDOVER.md`.
 
+## 39. AULA L99 research checkpoint (2026-11-18)
+
+### 39.1 Repository state
+
+- Repository: C:\temp\aula-l99-controller
+- Branch: main
+- Remote: https://github.com/miniz3210/aula-l99-controller.git
+- HEAD commit: `5ee8c0a` — `docs: consolidate AFRE research and static MVP readiness`
+- Working tree: clean for tracked files; substantial pre-existing untracked evidence present (not to be touched, staged, or modified)
+- Only `README.md`, `CHANGELOG.md`, `docs/PROJECT_HANDOVER.md` may be edited and staged for this commit
+
+### 39.2 REA access (confirmed)
+
+- REA host `rea` at 10.1.0.107 confirmed reachable
+- Command: `plink.exe -batch -i $env:USERPROFILE\.ssh\aula-rea.ppk reauser@10.1.0.107 "hostname"` → `rea`
+- REA root: /home/reauser/rea-lab
+- Ghidra 12.1.4, OpenJDK 21, processor language MCORE:LE:32:default
+- Canonical firmware transfer path: /home/reauser/rea-lab/transfer/HFD_Code_V2.3.bin
+
+### 39.3 V4 full-firmware analysis pipeline (completed)
+
+- PIPELINE_COMPLETED; RUNTIME_LCD_UNVERIFIED
+- 19463 functions attempted, 19460 decompiled, 3 failed
+- Evidence: V4 status.json phase COMPLETED, detail FULL_FUNCTION_ATTEMPT_COMPLETE (2026-11-17T20:24:36Z)
+- Evidence: V4 FINAL_ACCEPTANCE_REPORT.md
+
+### 39.4 SerialPortTool Targeted Deep V1 (completed)
+
+- 34 jobs, 0 failures; Verdict: TARGETED_EVIDENCE_COLLECTED
+- Targets: 0x408c10, 0x407ad0, 0x407dc0, 0x407ef0, 0x408250, 0x4087e0
+
+### 39.5 Safe Flash Blockers V1 / Owner and Marker V1 (completed)
+
+- Safe Flash Blockers V1: 18 jobs, 0 failures; verdict SAFE_FLASH_NOT_READY
+- Owner and Marker V1: 2 jobs, 0 failures; verdict SAFE_FLASH_NOT_READY
+- MARKER_XREF 60026e60 -> 6000f000 type=DATA owner=NONE
+
+### 39.6 CALLIND target provenance (C_FINAL_REPORT.md)
+
+- INSUFFICIENT_EVIDENCE; 49/49 CALLIND sites unresolved; 0/49 resolved LOAD address or validated literal value
+
+### 39.7 Unowned code and CFG recovery (D_FINAL_REPORT.md)
+
+- 221 unowned regions, 21666 unowned instructions
+- 100 high-confidence CFG candidates (≥8), 84 medium (5-7), 0 low
+- 67 code/data boundary conflicts
+
+### 39.8 HardwareMonitor static analysis (HM3_FINAL_REPORT.md)
+
+- DeviceDriver.exe static analysis
+- GetPrivateProfileStringW reads CPU_Temperature/GPU_Temperature from `C:\Program Files (x86)\AULA L99\data.ini` — canonical telemetry path (NOT HardwareMonitor subpath)
+- HID via WriteFile/DeviceIoControl
+- No HidD_SetFeature/GetFeature
+- Exact 64-byte report layout not fully reconstructed due to XOR obfuscation
+
+### 39.9 Buffer-to-HID static dataflow (HM4B_FINAL_REPORT.md)
+
+- WriteFile callsite 0x004707AA in FUN_00470670 (may contain XOR)
+- DeviceIoControl callsite 0x0045EE87 with IOCTL 0xB0192 in FUN_0045ee50
+- USB G3 Type C: begins `00 01 5A 1A`, ends `AA 55`
+
+### 39.10 SQLite reconciliation (B_FINAL_ACCEPTANCE.md)
+
+- SQLite reconciliation defect fixed in reconcile_calls.py (duplicated write block removed)
+- 9 JSONL ownership rows
+
+### 39.11 Page 21 Mini Numpad (P21_FINAL_ACCEPTANCE.md)
+
+- Page 21 Mini Numpad descriptor schema VERIFIED_STATIC
+- 19-byte record layout
+- numpad_1 at header offset 0x00024CA9, payload offset 0x00024CAC
+- unpressed=341 (0x0155), pressed=342 (0x0156), goto=0xFFFF
+
+### 39.12 Canonical evidence hashes
+
+| Artifact | SHA-256 | Context |
+|----------|---------|---------|
+| HFD_Code_V2.3.bin | `A76806ADA9648D2672BBEBEAD8A9BB396C0BC6F3A0A071E22E99001AC3359D03` | Verified firmware (313652 bytes) |
+| UartTFT-II_Flash.bin | `4CB3FA5C77EEA973A2B62CA61873F071692694F4C9A1832507FE2C8C9BA582B4` | Verified factory resource image (127599044 bytes) |
+| HFD_Code_V2.2.bin | `432E358CAC96FB930AB680ADA6F953C9005027C58B31B7EE3BB6BC7868EF35CF` | Verified firmware (305800 bytes) |
+
+### 39.13 Third-party classification
+
+- Third-party repository `https://github.com/kei825/aula-l99-screen-fw`: M*Core disassembler/emulator, LT168 MMIO model, GT911, W25N01GV, SCI1 and LCD models, custom 4x4 deck design, PC-side serial deck implementation, detailed hardware/firmware notes
+- Repository omits proprietary Levetop engine/SDK components and cannot be treated as a standalone reproducible firmware build
+- No third-party firmware should be flashed without independent compatibility and recovery verification
+- Custom firmware is not claimed as a safe path
+
+### 39.14 Transport separation
+
+Keyboard events (USB HID VID 0C45/PID 800A) and screen runtime updates (CDC VID EEEF/PID 268A) use physically separate transport paths. No cross-controller write path has been verified as safe.
+
+### 39.15 Safe-flash blockers
+
+- Hardware flashing: NO-GO. Safe Flash Blockers V1 and Owner and Marker V1 both verdict SAFE_FLASH_NOT_READY
+- No hardware write is permitted until image-level self-checksum, write scope, interrupted-write recovery, and exact UI-only package acceptance are VERIFIED
+- Image-level self-checksum in UartTFT-II_Flash.bin: UNKNOWN
+- Exact UI-only package acceptance: STRONG_INFERENCE only
+- Interrupted-write recovery behavior: UNKNOWN
+
+### 39.16 Next four read-only sessions
+
+1. REA full-firmware V7.2 target-proximity and root-triage audit (triaging 42 zero-incoming roots, 368 unresolved source sites, bounded branch-span around 0x600315D0) — read-only, Ubuntu REA, Ghidra 12.1.4
+2. Bounded `0x0086EF40` cross-reference audit using `scripts/research/hfd_address_xrefs.py` — read-only, Windows local, no hardware access
+3. Screen-control protocol research using captured USB traffic analysis — read-only, Windows local, capture-local addresses only
+4. Independent ISA verification when needed — read-only, Ubuntu REA/Ghidra, no new experiments
+
+### 39.17 Checksum-scanner requirements
+
+Already documented in section 16 (checksum scanner operation and performance). Quick mode target under 30 seconds, deep-mode cache keyed by source hash/patched hash/scanner version/algorithm list/region map, native CRC implementations, multiprocessing across independent jobs, no full-region rescan for every candidate, mmap/memoryview access, progress reporting, phase timings, deterministic machine-readable output. Image-level self-checksum remains UNKNOWN.
+
+### 39.18 Preserved constraints
+
+- Do not change Python code, tests, firmware, generated CFG outputs, version files, or analysis budgets
+- Do not modify any file other than `docs/PROJECT_HANDOVER.md`, `README.md`, `CHANGELOG.md`
+- Do not claim Type 3 discovery
+- Do not claim full-firmware coverage
+- Do not claim vendor confirmation of M*Core or the Ghidra processor
+- Do not claim the compiler-spec patch is the true ABI
+- Do not change VERSION
+- Do not run an 8192 experiment
+- Do not add vector roots
+- Do not commit, tag, or push without explicit approval
+- `scripts/research/hfd_cfg.py` and `tests/test_hfd_cfg_partition.py` remain modified in the working tree; do not commit without explicit approval
+
 ## External Research Reconciliation and New-Chat Handover

@@ -21,6 +21,23 @@ This is an active reverse-engineering and prototyping project. The present miles
 - Native Type 3 runtime mapping and dispatcher remain unverified.
 - No claim of safe firmware modification or flashing follows from this analysis.
 - Current hardware-write status remains blocked pending offline patch validation and recovery review.
+- REA host `rea` (10.1.0.107) confirmed reachable via `plink.exe -batch -i $env:USERPROFILE\.ssh\aula-rea.ppk reauser@10.1.0.107 "hostname"` → `rea`.
+- V4 full-firmware analysis pipeline completed: PIPELINE_COMPLETED; 19463 functions attempted, 19460 decompiled, 3 failed; RUNTIME_LCD_UNVERIFIED.
+- SerialPortTool Targeted Deep V1: COMPLETED (34 jobs, 0 failures); targets 0x408c10, 0x407ad0, 0x407dc0, 0x407ef0, 0x408250, 0x4087e0; Verdict: TARGETED_EVIDENCE_COLLECTED.
+- Safe Flash Blockers V1: COMPLETED (18 jobs, 0 failures); Safety verdict: SAFE_FLASH_NOT_READY.
+- Owner and Marker V1: COMPLETED (2 jobs, 0 failures); Safety verdict: SAFE_FLASH_NOT_READY; MARKER_XREF 60026e60 -> 6000f000 type=DATA owner=NONE.
+- C_FINAL_REPORT.md: INSUFFICIENT_EVIDENCE; 49/49 CALLIND sites unresolved; 0/49 resolved LOAD address or validated literal value.
+- D_FINAL_REPORT.md: 221 unowned regions, 21666 unowned instructions, 100 high-confidence CFG candidates (≥8), 84 medium (5-7), 0 low, 67 code/data boundary conflicts.
+- HM3_FINAL_REPORT.md: DeviceDriver.exe static analysis — GetPrivateProfileStringW reads CPU_Temperature/GPU_Temperature from `C:\Program Files (x86)\AULA L99\data.ini`; HID via WriteFile/DeviceIoControl; no HidD_SetFeature/GetFeature; exact 64-byte report layout not fully reconstructed due to XOR obfuscation.
+- HM4B_FINAL_REPORT.md: WriteFile callsite 0x004707AA in FUN_00470670 (may contain XOR); DeviceIoControl callsite 0x0045EE87 with IOCTL 0xB0192 in FUN_0045ee50; USB G3 Type C: begins `00 01 5A 1A`, ends `AA 55`.
+- B_FINAL_ACCEPTANCE.md: SQLite reconciliation defect fixed in reconcile_calls.py (duplicated write block removed); 9 JSONL ownership rows.
+- P21_FINAL_ACCEPTANCE.md: Page 21 Mini Numpad descriptor schema VERIFIED_STATIC; 19-byte record layout; numpad_1 at header offset 0x00024CA9, payload offset 0x00024CAC; unpressed=341 (0x0155), pressed=342 (0x0156), goto=0xFFFF.
+
+## Transport separation and custom firmware direction
+
+Keyboard events (USB HID VID 0C45/PID 800A) and screen runtime updates (CDC VID EEEF/PID 268A) use physically separate transport paths. No cross-controller write path has been verified as safe.
+
+Custom firmware direction: third-party repository `https://github.com/kei825/aula-l99-screen-fw` provides M*Core disassembler/emulator, LT168 MMIO model, and custom deck design, but omits proprietary Levetop engine/SDK components and cannot be treated as a standalone reproducible firmware build. No third-party firmware should be flashed without independent compatibility and recovery verification. Custom firmware is not claimed as a safe path.
 
 **Current CFG and JMPI evidence status (2026-11-14)**:
 - HEAD: `13b1ff06d99c837a1c2690ae897f84d27a51db66` (`main...origin/main [ahead 2]`, tracked tree clean; `analyze_pending.py` untracked).

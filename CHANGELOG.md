@@ -2,6 +2,39 @@
 
 ## Unreleased
 
+### AULA L99 research checkpoint (2026-11-18)
+
+#### Confirmed
+- REA host `rea` (10.1.0.107) reachable via `plink.exe -batch -i $env:USERPROFILE\.ssh\aula-rea.ppk reauser@10.1.0.107 "hostname"` → `rea`.
+- V4 full-firmware pipeline: PIPELINE_COMPLETED; 19463 functions attempted, 19460 decompiled, 3 failed; RUNTIME_LCD_UNVERIFIED.
+- SerialPortTool Targeted Deep V1: COMPLETED (34 jobs, 0 failures); targets 0x408c10, 0x407ad0, 0x407dc0, 0x407ef0, 0x408250, 0x4087e0; Verdict: TARGETED_EVIDENCE_COLLECTED.
+- P21_FINAL_ACCEPTANCE.md: Page 21 Mini Numpad descriptor schema VERIFIED_STATIC; 19-byte record layout; numpad_1 at header offset 0x00024CA9, payload offset 0x00024CAC; unpressed=341 (0x0155), pressed=342 (0x0156), goto=0xFFFF.
+
+#### Strongly supported
+- HFD Code V2.3 little-endian M*Core architecture fingerprint based on structural and third-party implementation evidence (not Levetop vendor-confirmed).
+- Candidate image base 0x60010000; 21 candidate entries verified in-range, 2-byte aligned, within image.
+- Canonical M*Core CFG checkpoints: 4096 baseline, 8192/512, 8192/1024, 12288/1024, 12288/1536 (PASS_BUDGET_TRUNCATED, reconciliation PASS).
+- JMPI evidence: literal-pool helper ACCEPTED; standalone post-processor ACCEPTED; legacy integrated JMPI mode RETIRED.
+
+#### Locally correlated candidate (not confirmed on user unit)
+- DeviceDriver.exe static analysis (HM3): GetPrivateProfileStringW reads CPU_Temperature/GPU_Temperature from `C:\Program Files (x86)\AULA L99\data.ini` (canonical telemetry path); HID via WriteFile/DeviceIoControl; no HidD_SetFeature/GetFeature.
+- HM4B: WriteFile callsite 0x004707AA (FUN_00470670, may contain XOR); DeviceIoControl callsite 0x0045EE87 IOCTL 0xB0192 (FUN_0045ee50); USB G3 Type C begins `00 01 5A 1A`, ends `AA 55`.
+- Safe Flash Blockers V1 / Owner and Marker V1 verdicts: SAFE_FLASH_NOT_READY; MARKER_XREF 60026e60 -> 6000f000 type=DATA owner=NONE.
+
+#### Unverified
+- Type 3 runtime mapping and dispatcher.
+- Icon-selection formula.
+- Native Type 3 runtime mapping.
+- Runtime LCD update / dynamic Stream Deck.
+- Host-facing input/parser/dispatcher → 0x600315D0 firmware-side edge.
+- HardwareMonitor INI-to-HID complete dataflow.
+- Image-level self-checksum in UartTFT-II_Flash.bin (UNKNOWN).
+- Exact UI-only package acceptance (STRONG_INFERENCE only).
+- Interrupted-write recovery behavior (UNKNOWN).
+
+#### Safety decision
+- Hardware flashing: NO-GO. Safe Flash Blockers V1 and Owner and Marker V1 both verdict SAFE_FLASH_NOT_READY. No hardware write is permitted until image-level self-checksum, write scope, interrupted-write recovery, and exact UI-only package acceptance are VERIFIED.
+
 ### AFRE Wave 2 research checkpoint (2026-11-16)
 
 #### Added
