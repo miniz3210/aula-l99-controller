@@ -3088,4 +3088,38 @@ Already documented in section 16 (checksum scanner operation and performance). Q
 - Do not commit, tag, or push without explicit approval
 - `scripts/research/hfd_cfg.py` and `tests/test_hfd_cfg_partition.py` remain modified in the working tree; do not commit without explicit approval
 
+## 40. AULA L99 screen research summary (2026-11-20)
+
+### 40.1 Confirmed findings
+
+- Open-source screen-firmware direction identified: https://github.com/kei825/aula-l99-screen-fw (M*Core disassembler/emulator, LT168 MMIO model; omits proprietary Levetop engine/SDK components; not a standalone reproducible firmware build; no third-party firmware should be flashed without independent verification).
+- Chinese AULA software version 1.0.1.4 confirmed as the only verified baseline exposing both keyboard and screen firmware upgrade as separate paths targeting different controllers.
+- Keyboard (USB HID VID 0C45/PID 800A) and screen (CDC VID EEEF/PID 268A) firmware paths remain explicitly separate; no cross-controller write path verified as safe.
+- Official screen updater L99_ISP_CNUI_V1.23_156.exe successfully launched with Fn+X+0+6 to enter screen update mode (bootloader COM4); evidence only — no custom firmware flashed.
+- DeviceDriver.exe/HardwareMonitor telemetry writes to C:\Program Files (x86)\AULA L99\data.ini (CPU_Temperature/GPU_Temperature).
+- LT168B NOT confirmed hardware; teardown photos show HFD168BDP screen controller marking; relation to Levetop LT168B is inference.
+- Screen sub-board SI-2686-TFT-3.98 V01; flash Winbond 25N01GV; touch IC Goodix GT911; SW2 push switch; four test pads (probably PGMCK/PGMIO/RST, not verified by continuity).
+
+### 40.2 Safety position
+
+- Hardware flashing: NO-GO. SAFE_FLASH_NOT_READY. Preserve official path; do not flash speculative/custom image; establish image layout/checksums/target memory regions/page counts/updater validation/recovery boundaries first.
+- Do not claim conclusions from overnight REA output until reviewed.
+
+### 40.3 Unresolved items
+
+- Overnight REA package being prepared/executed separately; output not yet reviewed.
+- Exact user-unit screen-controller revision unconfirmed.
+- Interrupted-write recovery behavior UNKNOWN.
+- Image-level self-checksum UNKNOWN.
+
+### 40.4 Explicit next task
+
+Review overnight REA output, map conclusions to reproducible evidence, decide if evidence sufficient for non-flashing screen-runtime prototype; do not proceed to custom flashing solely from inferred image structure.
+
+### 40.5 Cross-references
+
+- Detailed 2026-11-20 entries (E52-E54, cap4/cap5, LT168 manual pages, UI format findings, teardown photos) appear in CHANGELOG.md.
+- Screen research summary section added to README.md.
+- Safety constraints in sections 11, 23, 26, and 39.15 remain in force.
+
 ## External Research Reconciliation and New-Chat Handover

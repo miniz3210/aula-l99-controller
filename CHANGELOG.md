@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+### AULA L99 screen research summary (2026-11-20)
+
+#### Confirmed
+- Open-source screen-firmware direction identified: https://github.com/kei825/aula-l99-screen-fw (M*Core disassembler/emulator, LT168 MMIO model; omits proprietary Levetop engine/SDK components; not a standalone reproducible firmware build; no third-party firmware should be flashed without independent verification).
+- Chinese AULA software version 1.0.1.4 confirmed as the only verified baseline exposing both keyboard and screen firmware upgrade as separate paths targeting different controllers.
+- Keyboard (USB HID VID 0C45/PID 800A) and screen (CDC VID EEEF/PID 268A) firmware paths remain explicitly separate; no cross-controller write path verified as safe.
+- Official screen updater L99_ISP_CNUI_V1.23_156.exe successfully launched with Fn+X+0+6 to enter screen update mode (bootloader COM4); evidence only — no custom firmware flashed.
+- DeviceDriver.exe/HardwareMonitor telemetry writes to C:\Program Files (x86)\AULA L99\data.ini (CPU_Temperature/GPU_Temperature).
+- LT168B NOT confirmed hardware; teardown photos show HFD168BDP screen controller marking; relation to Levetop LT168B is inference.
+- Screen sub-board SI-2686-TFT-3.98 V01; flash Winbond 25N01GV; touch IC Goodix GT911; SW2 push switch; four test pads (probably PGMCK/PGMIO/RST, not verified by continuity).
+
+#### Safety
+- Hardware flashing: NO-GO. SAFE_FLASH_NOT_READY. Preserve official path; do not flash speculative/custom image; establish image layout/checksums/target memory regions/page counts/updater validation/recovery boundaries first.
+- Do not claim conclusions from overnight REA output until reviewed.
+
+#### Unresolved
+- Overnight REA package being prepared/executed separately; output not yet reviewed.
+- Exact user-unit screen-controller revision unconfirmed.
+- Interrupted-write recovery behavior UNKNOWN.
+- Image-level self-checksum UNKNOWN.
+- Next task: Review overnight REA output, map conclusions to reproducible evidence, decide if evidence sufficient for non-flashing screen-runtime prototype; do not proceed to custom flashing solely from inferred image structure.
+
+#### Cross-references
+- Detailed 2026-11-20 entries (E52-E54, cap4/cap5, LT168 manual pages, UI format findings, teardown photos) appear later in this Unreleased section.
+
 ### AULA L99 research checkpoint (2026-11-18)
 
 #### Confirmed
@@ -826,3 +851,205 @@ Next:
 - Built-in page/resource table locations within HFD_Code binaries not yet located.
 - Recovery and bootloader procedure not yet established.
 - Exact cause of external author's bricked keyboard remains unproven.
+## 2026-11-19 - E30a, E33, E34 results (offline and read-only, no hardware access)
+- E30a (EVIDENCE): tested library matcher, parser self-test passed. Firmware C1/C2/C3 contain 91/91/90 unique library functions byte-identical to the vendor mcore-elf libraries (about 11 percent of the code region). Divide-enabled multilib (top level = c0_div) matches 7 more functions than c0_nodiv (84 vs 91, 13004 bytes), so the firmware was built with the default divide-enabled C0 multilib, little endian. Relocation-derived __malloc_av_ = 0x800D68 / 0x800D64 / 0x800D54 equals the self-pointer address derived separately. Matched names include _malloc_r, _free_r, _realloc_r, memcpy, memset, strlen, strcmp, _svfprintf_r, siprintf, floorf, powf, sqrtf, _sbrk, _write.
+- E33 (EVIDENCE): alignment C1 vs C2 91.1 percent, C1 vs C3 87.3 percent. V2.3-only block of 8000 bytes at C1 0x0FAB8-0x119F8 (present in both V2.3 builds). V2.2-only insertion of 364 bytes at about C3 0x06E02 near the flash chip name strings (INFERENCE: chip name table). Last 2252 bytes of each file = 1092 + 1160 (data image). Correction: the 148 byte size difference is not in the tail.
+- E34 (EVIDENCE with corrections): K frame as sent: idx0 K, idx1 param, idx2-3 LT, idx4-7 time, idx8-11 CRC32 (identifier only keys the CRC, not sent), idx12-13 E8 17, idx16 baud class (7F for 921600 else 08). Reply CRC32 is recomputed over idx0-15 with the identifier at 8-11 and the tag word 0x4C544F50 (POTL) at 12-15, compared with reply bytes 1-4. Reply type words 0xEEBA0080/0xEEBA0081/0xEEBA0020. Flash-id request is 6D 01 pp then zeros (CONCAT12 puts param_1 in the high byte); reply marker 7D then the id as little endian u32; id is looked up in Flash.ini section FLASH. DeviceDriver search remains invalid: the decompile lists constants in decimal (CONST lines).
+- Corrected earlier reports: E34 K frame indexes shifted by 4, E34 flash-id query byte order, E33 size accounting, E26 positive return value of the handshake function.
+- Open: E32 report missing. Next: E32 rerun, E35 (handshake literals in HFD), E36 (describe unmatched ranges), E37 (K callers, Flash.ini lookup, DeviceDriver decimal constants).
+- Direction unchanged: custom firmware. SAFE_FLASH_NOT_READY.
+
+## 2026-11-19 - E32 flag routine, E30a library proof, data image layout (offline and read-only, no hardware access)
+- EVIDENCE: relocation-derived symbol addresses (65 named symbols, one address each) equal base 0x60010000 plus the file offset of the matched library bodies for 50 symbols, 0 conflicts. Link base and linear layout of C1 are proven for the library region by a method independent of the vector table. The updater long-branch rotation cannot be the runtime layout (it would overwrite CRC table bytes 0x320-0x4FF).
+- EVIDENCE: library code spans C1 0x6E70-0xF934 (91.9 percent byte-identical). Reset routine at 0x7490 lies inside it. Application code follows at about 0xF934.
+- EVIDENCE: lrw (register bits 11-8, offset bits 7-0) and jsri/jmpi use pool = ((pc+2) AND -4) + 4*offset. Checked on the reset routine and on all 584 call graph rows. Earlier audit script decoded lrw wrongly (E32 verdict LRW_FORMULA_NOT_DETERMINED was a tool bug).
+- EVIDENCE: function at 0x60036E30 loads 0x6000F000 (lrw r2 at 0x60036E3E) and 0x40130000 (lrw r6 at 0x60036E50) and calls 0x60047E68, 0x60047E8C, 0x60048170. INFERENCE: update flag write followed by watchdog use. Callers unknown.
+- Data image of C1 starts at or before 0x4C07C (impure_data 0x4C080, malloc bins 0x4C4AC = RAM 0x800D68, __fdlib_version = last word = RAM 0x8011EC). RAM end is 0x8011F0. Corrects the earlier end 0x8011E8 and the multibyte length reading.
+- Name corrections: 0x60019600 is _sbrk_r, compare functions __nedf2/__ltdf2/__ledf2/__gesf2/__ltsf2 by relocation.
+- New tools: aula_poolref.py, aula_callers.py. New file: C1_library_labels.csv (129 rows).
+- Next: E38 (callers), E39a (decode routine and callees), E39b (start-up and data copy parameters). Pending: E35, E36, E37.
+- Direction unchanged: custom firmware. SAFE_FLASH_NOT_READY.
+
+## 2026-11-19 - E38, E39a, E39b: start-up parameters and flag routine callers (read-only, no hardware access)
+- EVIDENCE: start-up routine (C1 0x60045150) loads five literals: data copy source 0x6005BF44 (file 0x4BF44), RAM 0x800800-0x8011F0 (2544 bytes), bss 0x801200-0x870E6C. Source plus size equals the file size exactly in C1 (0x4C934), C2 (0x4C8A0) and C3 (0x4AA88). Corrects the earlier data image start estimate 0x4C068 and the E39b statement that sizes disagree (0x4C934-0x4BF44 = 0x9F0).
+- RAM map C1: data 0x800800-0x8011F0, bss 0x801200-0x870E6C (457836 bytes), stack top 0x874FFC (16784 bytes above bss end).
+- Call chain: reset 0x60017490 -> main 0x600449B0 -> 0x60021994 -> 0x60036E30 (flag routine). Main loads 115200 into r3 before its second call (0x60049C18).
+- Flag routine 0x60036E30: r2 = 0x6000F000, r3 = stack pointer, r4 = 4, callee B 0x60047E8C loads 0x60200000 (2 MB flash end), callee C loads 0x400E0000/0x400E006C, watchdog base 0x40130000. Same decoded shape in C1, C2, C3 (pool values differ). INFERENCE: 4-byte flash access with bounds check; read or write not shown.
+- V6 call graph is incomplete (4 literal references to 0x60036E30 vs 1 csv edge).
+- V2.2 conflict: C3 base is 0x6000A000, so 0x6000F000 lies inside the C3 image (file 0x5000); in V2.3 it lies 0x1000 below the image.
+- Interrupt rule (vector 32+n = source n): RGBC vector 57 loads 0x401A0000 (match). Vectors 32, 35, 36 load 0x40110000, 0x400A0000, 0x400B0000 (bases not in the known list). Seven large handlers still untested.
+- Next: E40 (decompiled text, REA), E41 (handlers, callers, literal counts), E36, E35. Pending: VirusTotal results, datasheet memory map pages.
+- Direction unchanged: custom firmware. SAFE_FLASH_NOT_READY.
+
+## 2026-11-19 - E43 results: flag routine, flash helper, boot logic (read-only, no hardware access)
+- EVIDENCE (Ghidra decompiled text, V2.2 C3 and V2.3 C1): flag routine (C1 0x60036E30, C3 0x6002F01C) copies a 1396 byte flash helper to RAM, calls the flash write helper with (0x6000F000, &0xFFFFFFFF, 4), clears PWM1 bits, writes IER=0 and WDT+2=0, then jumps through the word stored at the address its caller passes (0x60000000, flash start). INFERENCE: entry into the bootloader / update mode; the bootloader is not in any HFD file.
+- Flash write helper (C1 0x60047E8C, C3 0x6003FC74): range check against 0x60200000, cache module off, parameter block at RAM 0x800600-0x8006C0, calls RAM code at 0x800004. Used with sector aligned addresses and 70 byte records by the settings writer, so it erases and programs.
+- Settings store: 200 slots x 4 KiB at 0x60081000-0x60149000, 70 byte records. The ring end shows the internal flash is the 2 MiB part (INFERENCE, UNVERIFIED).
+- Correction: the flag routine does NOT run on every start. V2.2 main runs it only if the external flash id is not 0xEFAA21 / 0xC89101; V2.3 runs it when detection 0x60021818 returns 0.
+- V2.2 recognises W25N01GV (0xEFAA21); none of the four V2.3 ids seen equals it. V2.2 is now the working baseline for the unit (INFERENCE).
+- V2.3 only block 0x0FAB8-0x119F8 holds the flash detection table (0x60021818) and the 0x104 byte configuration block reader (0x60021994).
+- Interrupt rule confirmed by IER bits: bit 28 (SCI1) around UART init, bit 30 (EPORT0) around a wait loop.
+- Correction: E43 package seed isr_usb for C1 used a file offset (0x60037D10); the vector 46 handler is 0x60047D10. C3 0x6003FAF8 is correct. Pool variable resolution in L99DecompAt.java matched the wrong names.
+- Next: E44 (REA, detached package: call tree decompile), E45 (UI image header CRC probe), E46 (RAM blob, data image, clock, flag sector bytes). Pending: E37.
+- Direction unchanged: custom firmware. SAFE_FLASH_NOT_READY.
+
+## 2026-11-19 - E44/E45/E46 results: stock command protocol, update-mode entry, display and flash facts (read-only, no hardware access)
+- EVIDENCE (C3 decompiled text): the flag routine is reached from main (unknown flash id), and from both command parsers when system register 0x2011 is written with AA 55. The RAM flash helper (188 bytes, identical in C1 and C3) erases the 4 KiB sector at flash offset 0xF000 and programs 0xFFFFFFFF; in V2.2 that sector is inside the application (image offset 0x5000). HAZARD: never write register 0x2011.
+- Stock firmware is an HMI engine: frame 5A A5 len func addr data CRC16; func 0x03 read, 0x10 write, 0x41 touch events; 0x2000 page, 0x2001 brightness, 0x2002 RTC, 0x200B volume. No host pixel upload command seen (INFERENCE).
+- Display: 16-bit writes to the external bus 0x20000000/0x20000002, ST7796S style init. RGB controller handler is a debug stub: frame buffer candidate 0x875000 withdrawn. LT168B still favoured (16-bit external bus, 2 MiB flash ring), unverified.
+- External flash is SPI NAND (0x9F, 0x13, 0x0F/0x1F, 0x6B, 2 KiB pages); V2.2 continues only for ids 0xEFAA21 and 0xC89101. Internal flash: NOR commands 0x06/0x05/0x20/0x02.
+- Corrections: early init sets the clock (12 MHz to 168 MHz, 0x6003EECC(168)); settings marker is 0x94; PWM1 is the audio output; E45 premise was wrong (config block is 0xF4 bytes at flash offset 0x80 with a salted CRC-32).
+- E45: no 256-byte plus CRC-32 block in the first 16 MiB of either UI image. E46: RAM helper identical in both builds; clock word 168000000.
+- Next: E47 (local, config block test), E48 (REA package, command path and SD update strings). SAFE_FLASH_NOT_READY.
+
+## 2026-11-19 - E47/E48: frame buffer confirmed, config block, protocol cross-check (read-only, no hardware access)
+- EVIDENCE: page canvas pointer is 0x00875000 in V2.3 (RAM 0x800934) and V2.2 (RAM 0x800920). Page render draws RGB565 into the canvas, then DMA pushes lines to the panel data register 0x20000002; a blit (V2.3 0x60057230) copies canvas regions. 307200 bytes ending at 0x8C0000.
+- E47: both UI images carry a valid config block at offset 0x80 (complement pair and salted CRC-32 init 0 match). Same reader in V2.3 (0x6004D4F0). Block bytes 12-13 = 5A A5, bytes 16-19 = 40 01 E0 01.
+- Registers: 0x2040 orientation (panel command 0x36 with 0x48/0xA0/0x88/0x60, swaps width and height), 0x200A sound, 0x203F preset load. PWM1 +0x34 = backlight duty (64 level table at RAM 0x800816, 0..500), callee C of the flag routine turns the backlight off.
+- Protocol: firmware frame 5A A5 len func addr data CRC16; vendor note frame Start cmd nn params CRC End4 with commands 0x80..0xF6. Parser handles 0x03 and 0x10 itself; other codes go to an unresolved indirect jump (0x6004281C etc.). Not resolved.
+- Correction: V2.3 recognises eight NAND ids (incl. 0xEFAE21); V2.2 recognises 0xEFAA21 and 0xC89101. Updater picks V2.2 only for 0xEFAA21. Which build the unit runs is open again.
+- V2.2 has SD card flasher strings; V2.3 does not. V2.3 0x60021994 reads a 0x104 byte block (page 0, col 0, CRC-32) probably a bad block remap table, not part of the UI image.
+- Next: E49 (REA agent prompt, dispatcher listing). E50 (local, SD strings by value). Pending: E37.
+- Direction unchanged. SAFE_FLASH_NOT_READY.
+
+## 2026-11-19 - E49: parser dispatch resolved; upload capture is the native extended frame (read-only, no hardware access)
+- EVIDENCE (V2.3 listing): USB parser 0x60041E14 handles function 0x03 and 0x10 itself; every other normal frame goes to 0x6004281C which knows only 0x61 (sub-commands 0-6) and 0x62 (only when current page is 0x12). Vendor note command set 0x80-0xF6 is NOT implemented by the parsers.
+- Native frame: 5A A5, then first byte; non-zero = normal [len][func][payload][CRC16 lo hi]; zero = extended [00][len hi][len lo][func][payload][CRC16 lo hi]. CRC covers func+payload. Capture frames map: data 00 08 07 64 (length 0x0807 = 1+4+2048+2, func 0x64), short 00 00 12 64, commit 00 00 0B 66 (func 0x66). Earlier labels "cmd 07/12/0B" and "const 64/66" were wrong (low length byte and function code); byte strings and CRC unchanged.
+- Extended functions: USB parser 0x64 write (address must be above 0x03FFFFFF; slot starts 0x04000000+k*0x60000 and 0x04240000 begin a new image; staged total = record size + 11 = 307211), 0x66 commit (calls 0x6002148C, 128 KiB blocks), 0x67 status. Serial parser also 0x61 (sector write at address+0x0804B000), 0x62 (read), 0x63 (CRC-32 of flash range), 0x65 (NAND read). Replies: func, FF, func, address, 'O','K'.
+- Page render confirmed: canvas 0x875000 mode byte 2, base picture + widgets, DMA push to 0x20000002; region blit 0x60057230.
+- No host pixel push command exists in the stock parsers. HAZARD: never send extended frames 0x61-0x67 or function 0x61 to a unit.
+- Next: E50 (REA agent, commit/CRC/send helpers, 0x61 sub-commands, drawing primitives). Pending: E37; hardware step (read flash id) decides G7.
+- Direction unchanged. SAFE_FLASH_NOT_READY.
+
+## 2026-11-19 - E51 results: PC updater protocol, flash helper guard, peripheral census (read-only, no hardware access)
+- EVIDENCE (updater decompile): MCU update sequence K('0'), K('1'), L(start,end), J frames in 0x800 byte chunks ascending, N(length,CRC). For identifier 0x1971268A the start is 0 and the end is the file size. 64 byte pieces: 4A 30 (addr, len, up to 56 bytes), 4A 31 (62 bytes), 4A 32 (rest). CRC-32 init 0, no final xor. No erase frame; the PC tool never writes 0x6000F000 (V2.2 file carries 00000000 at image offset 0x5000).
+- Rotation is conditional (size >= 0x5C01 and a string predicate false), same predicate as the trailer CRC check; raw HFD files are not rotated. Earlier rotation reasoning (v11, v13) withdrawn.
+- UI image: length at 0x174, CRC-32 at 0x178, complement at 0x17C, blanked to FF by the tool. UI data frames j/k/l, marker 7C, verify n.
+- Flash helper (V2.3 0x60047E8C, V2.2 0x6003FC74): returns 0 ok, 1 above 0x60200000, 2 below 0x60000000; NO lower guard against the bootloader area. Custom firmware needs its own guard.
+- Application never arms the watchdog: only writes 0 to WDT+2 (early init, flag routine). EPORT1, EPORT2, SCI0, SCI2, CCM, RCM not used. EPORT0 only for touch (GT911 class sequence, I2C 0x28).
+- Datasheet: PGMCK and PGMIO are the default function of pins 64 and 57 (LT168B and LT168C), shared with RXD2 and TXD2; pads DIO and SCK are very likely this programming port (INFERENCE).
+- Commit 0x66 (V2.3) programs the external NAND through a bad block table and returns CRC; V2.2 0x66 reads back and returns CRC; 0x67 bad block status.
+- Next: E52 (REA package): static analysis of L99_ISP_CNUI_V1.23_156.exe and L99_CN_V1.31.exe. SAFE_FLASH_NOT_READY.
+
+## 2026-11-20 - E52 results and official update page (read-only, no hardware access)
+- Official page (aulastar announcement 788): keyboard firmware with "L99 Keyboard Reset Firmware Update Tool", then screen firmware: hold FN and press X, 0, 6 to put the screen into update mode, then run the screen tool. Package "L99 Reset Firmware 2026.05.25". HAZARD: the combination erases the flag sector (inside the application in V2.2).
+- L99_CN_V1.31.exe is a SONiX USB MCU ISP tool (keyboard, SN8 files, VID 0C45), not a screen tool. L99_ISP_CNUI_V1.23_156.exe is the Levetop Qt screen tool packed with Enigma Virtual Box (inner name HFD_ISP_TOOL_V1.31.exe; contains Flash.ini, HFD_Code_V2.2.bin, HFD_Code_V2.3.bin). raw_isp_v123 text comes from it.
+- Screen protocol corrections: UI 'j' frame has a 1 byte length (max 0x39), data up to 57 bytes; K parameters '0','2' for the UI path; K byte 14 = 0x7F at 921600 baud else 0x08; device words 0xEEBA0080/81/20 select per-chunk delays 125/50/125 ms. Flash.ini line = id,n1,n2,name (size = n1*n2).
+- Nine ids 0x1971168A/B, 0x1971268A-D, 0x19712690, 0x19717689, 0x19717760 (names LT168A/B, LT268A-D, LT2690, LT7689, LT776). 268x is a bootloader family name; the chip is LT168 class (LT268A has 72 MHz, 64 KB flash, 8 KB SRAM and cannot match). LT168B still favoured, unverified.
+- Hardware rescue lead: Levetop LT268 manual enters upgrade mode with BUSY pin to ground plus reset (development board); L99 SW2 or pads may be the same strap (INFERENCE).
+- Next: E53 (REA package): official reset tools "L99 keyboard Screen reset firmware.exe" and "L99 keyboard reset firmware.exe". SAFE_FLASH_NOT_READY.
+
+## 2026-11-20 - E53: official 2026.05.25 reset tools (static analysis, read-only, no hardware access)
+- Screen tool "L99 keyboard Screen reset firmware.exe": code sections equal to L99_ISP_CNUI_V1.23_156.exe; only Enigma-packed data differ. Contains HFD_Code_V2.2.bin and HFD_Code_V2.3.bin byte-identical to the analysed files (no new MCU code). Compile time stamp 2026-04-07.
+- Four embedded UI images: head 4 KiB differ in 22 bytes (config block bytes 0..5, complement pair 0x16C..0x173, CRC 0x178..0x17F). One has the factory CRC 0x7782E947, three have 0xE2CE3EF9 (same as V1.23_156). Header length 10,704,364 bytes (10.2 MiB) covers only the first part of the 127.6 MB factory file; header CRC rule (length at 0x174, CRC 0x178, complement 0x17C, 12 bytes set to FF) verified for all four.
+- Flash.ini identical in both tools (50 lines, 15 SPI NAND). All V2.3 NAND ids named: A1F1A1 TX25G01, C8D1C8 GD5F1GQ4UB, CDEA11 FS35ND01G, EFAE21 W25N01KV, C891C8 GD5F1GM7UE, 0B710B XT26G01F, 5EA1A1 ZB35Q01CYIG, 0B1100 XT26G01C; V2.2 ids EFAA21 W25N01GV and C89101 (not in Flash.ini). Build for the unit still depends on the NAND id.
+- Keyboard tools: "L99 keyboard reset firmware.exe" = L99_CN_V1.31.exe code and data; same SN32F290.hex (259282 bytes, SHA-256 43fe9a72768215a1394a9808d23cd12792da0b45ccc0c99195ab58abe0140c38). Only UISettings.ini texts differ. Keyboard MCU SN32F290 (VID 0C45, PID 7141/7140), hex starts with SP 0x20002B18 and reset vector 0x00007EE5 (Cortex-M class, INFERENCE).
+- Correction: UI image proper is 10.2 MiB; the need for a NAND follows from the data area at 64 MiB and above, not from the file size.
+- Next: upload SN32F290.hex (3 parts) for the keyboard to screen command path (FN X 0 6). SAFE_FLASH_NOT_READY.
+
+## 2026-11-20 - SN32F290 keyboard firmware rebuilt and first analysis (static, no hardware access)
+- SN32F290.hex (official keyboard reset tool) rebuilt from 3 uploaded parts: 5766 records, 0 checksum failures, contiguous image 0x00000-0x167F3 (92148 bytes, SHA-256 a805de868dfe27de39ff003dbf9c56347fa4e0441d0150a8a6802280c9872799), option bytes 55 55 AA AA at 0x3FFFC. SP 0x20002B18, reset vector 0x00007EE5 (Thumb). Cortex-M0 class.
+- USB device descriptor in the image: VID 0C45 PID 8801 (SONiX, USB KEYBOARD). Live keyboard noted as 0C45:800A, so the image is the reset build (or has a second descriptor set); PID after update to be checked.
+- HID: keyboard, consumer (id 3), system (id 2), key map (id 1), mouse (id 6), vendor id 5, vendor page 0xFF13 with 64 byte input/output/feature reports (host channel).
+- UI strings and an ST7735 style LCD init: tri-mode keyboard (USB, 2.4G, BT1-3) with its own status display (INFERENCE).
+- Frame header 5A A5 NOT present in the keyboard firmware; FN X 0 6 handler not located by pattern search. Earlier statement that the keyboard sends register 0x2011 AA 55 is unproven.
+- Next: E54 (REA package, Ghidra ARM text dump of the keyboard firmware). SAFE_FLASH_NOT_READY.
+
+## 2026-11-20 - E54 results: keyboard firmware SN32F290 decompiled (static, no hardware access)
+- Ghidra (ARM:LE:32:Cortex) created 225 functions, 224 decompiled. FN X 0 6 handler NOT found. No code builds frames for the 3.98 inch screen; the Modbus style header 5A A5 does not occur.
+- The only UART (0x40054000) is a wireless module link: keyboard to module A1 (8 byte boot report), A2 (14 byte key bitmap), A3 (consumer), A4, A5, A6 (mode 0x11, 0x30, 0x31-0x35), A8 (pointer), A9 (BT name Kzzi-Z98RGB); module to keyboard 5A (LED), 5B (link state), 61 0D 0A. Checksum = sum of bytes.
+- Keyboard drives a 160x80 ST7735 class display (images 0x6400 bytes from SPI flash, read command 03), bit banged I2C RTC (0xA2/0xA3, PCF8563 class) and battery gauge (0xC6/0xC7), settings pages 0x8000/0x8400/0x9400.
+- Coverage gap: about 183 functions never created (USB ISR vector 24 at 0x8C00, vectors 44/46/47, 0x1330-0x19AB, 0x4400-0x5600, 0xB600-0xD400). FN X 0 6 and the vendor 0xFF13 report handling are probably there.
+- Screen update mode from the keyboard: H1 (GPIO or USB path, BUSY like strap) favoured over H2 (serial command); INFERENCE.
+- Next: E55 (REA package, create missed functions and decompile with NAME@VALUE pool annotation). Passive check: Device Manager devices by connection. SAFE_FLASH_NOT_READY.
+
+## 2026-11-20 - FN X 0 6 capture (cap4) and K handshake verification (analysis only)
+- cap4 is the FN X 0 6 capture (screen tool window open, Start not clicked). 08:15:58.616 key 6 pressed (released after 8 ms), 08:15:58.949 screen (EEEF:268A) re-enumerates (0.333 s later) as the bootloader (serial TEST_1.0, COM4). No USB traffic between keyboard and screen; keyboard does not re-enumerate. Trigger reaches the screen outside USB (INFERENCE: signal line, hub port, or board-internal link).
+- Official screen tool: launch sends nothing (cap2). In update mode it opens the COM port itself and sends only 4 K frames (115200 baud x2, 921600 baud x2, class byte 0x08 / 0x7F). No L, J, N frames.
+- K handshake model verified on 4 real frames: host CRC = CRC32(init 0, no xor) over bytes 0..7 + identifier; reply CRC = CRC over host bytes 0..7 + device identifier + "POTL"; reply bytes 5..8 echo the host CRC when the candidate is accepted.
+- Device identifier is 0x1971168B (candidate 0x1971168A rejected first). Earlier assumption 0x1971268A was wrong. Name pattern: LT168B (INFERENCE). Type word 0xEEBA0081 (mode 1, 50 ms per chunk). Reply bytes 9..12 = 01 17 01 24 (INFERENCE build date 2024-01-17). Pointer 0x60002FB6 shows the bootloader below 0x6000A000. No V v flag: non-V/v frame branch (4 KiB frame) for this unit (INFERENCE, check the decompile).
+- Hub tree: keyboard and screen on WCH 1A86:8091 (ports 3 and 2); capture 4 did not include the hub node.
+- Next: replug test (screen black?), capture including the hub node, re-read the tool decompile for the group of ids 0x1971168A and 0x1971168B.
+
+## 2026-11-20 - cap5 hub capture and recovery observations
+- Update mode (bootloader, EEEF:268A serial TEST_1.0, COM4) is latched: a normal key does not leave it; only a power cycle (USB unplug and replug) returns the screen to the application (COM3). Flag sector not erased. Screen sends no traffic for at least 62 s in update mode.
+- cap5 (hub node included): hub status change bitmap 04 (port 2 = screen) at 08:38:16.212 (0.505 s before key 6), at 16.811, 16.931, 16.983 (0.094 / 0.214 / 0.266 s after key 6); screen enumerates at 17.051 (0.334 s after key 6; cap4: 0.333 s). Port 3 (keyboard) never changed; keyboard did not re-enumerate. No hub event during the 10 s idle before the keys. Replug: hub bitmap 0C (ports 2+3), screen enumerates in normal mode.
+- Hub class requests (GetPortStatus etc.) are not visible in USBPcap output, so the status bits are unknown. Trigger is not a USB command between keyboard and screen.
+- Mechanism open: keyboard-driven supply/USB link toggle in two steps (X 0, then 6) with a boot selection held until power loss, versus an unseen non-USB command link.
+- Next: optional FN X 0 only capture (note the key press times), E55 keyboard firmware pass, board photos and datasheet BUSY/BOOT/PGM pages.
+
+## 2026-11-20 - keyboard present in PnP but absent from sync2/sync3 captures
+- Keyboard USB\VID_0C45&PID_800A\A&374F4772&0&3 Status OK, parent chain: 1A86:8091 -> three 05E3:0610 hubs -> ROOT_HUB30 -> AMD xHCI (PCI 1022:1639, bus 6 function 4). Screen EEEF:268A shares the same chain and the same capture bus (bus 2), so "keyboard on another root hub" is ruled out. tshark -D lists only USBPcap1 and USBPcap2, both captured.
+- Open question: sync2/sync3 show hub (addr 12) and screen (addr 13) but no keyboard descriptor and no HID SET_REPORT/GET_REPORT. Hypotheses: keyboard not enumerated as USB at that time (tri-mode, cable only powering hub and screen) or descriptors/traffic missed at tshark start. Test sync4 with PnP snapshots before/after and a visual note of when the screen shows CPU/GPU.
+
+## 2026-11-20 - screen shows temperature and humidity (re-read of the photo)
+- Photo (2026-11-08): page "realtime data": time 09:14:22, date 2026/11/08 Sunday, temperature 8 C and humidity 50 % in one box (thermometer and droplet icons), CPU 5 % and GPU 3 % gauges, no network speed. The earlier claim "keyboard sensor" for the 8 C / 50 % box was retracted: source unknown (weather data, fixed default, keyboard sensor, or app data).
+- Frame bytes 14 (45 constant) and 16 (39-43) do not match 8 or 50, so the box is not fed by those bytes; bytes 22..61 are zero in all 41 frames of sync6. Possible sources: the other command frames (04 18, 04 28, 04 02, only the first bytes were reviewed) or a source other than the PC.
+- Next: current screen photo (value now, and after closing the official app); print all 64 bytes of the three command frames from sync6.
+
+## 2026-11-20 - LT168 pin note chapters 7 and 10: BOOT and PGM pins (official)
+- Chapter 7 (page 16): BOOT/INT1[7] = LT168A pin 24, LT168B pin 34, default EPORT1[7]; "boot-bit detect port, must not be low during power-up". No statement that pulling it low enters an ISP. The earlier hypothesis "SW2 is a BOOT strap" is not supported.
+- Chapter 10 (page 21): PGMIO/TXD2/INT2[4] and PGMCK/RXD2/INT2[5] = LT168A pins 37 and 44, LT168B pins 57 and 64; default function PGM download, can be configured as UART2 or EPORT2[4-5] by software (CCM->EPORT2FCR bits 4 and 5, OPTION->CCR). Custom firmware must not reconfigure pins 57/64 if the PGM download port is to stay usable.
+- Hardware rescue still open: PGM download protocol and tool, and where SW2/DIO/SCK are wired on the board.
+
+## 2026-11-20 - teardown photos: chip markings confirmed
+- Screen sub-board SI-2686-TFT-3.98 V01 (T=1.2MM, 2024.10.11): main chip marked HFD168BDP 2519-L02 (QFN68); flash marked Winbond 25N01GV (2424); 12.000 MHz crystal; touch IC Goodix GT911 (2436-B040) on the display flex; SW2 push switch; four test pads GND, SCK, DIO, RST (probably PGMCK pin 64 / PGMIO pin 57 / reset, NOT verified by continuity); CON2 (SPK+, SPK-).
+- Earlier "LT168B" naming corrected: the chip marking is HFD168BDP; its relation to LT168B (Levetop) is inference (768 KB SRAM, 2 MB flash, 168 MHz, QFN68 all match).
+- Photo 3 (keyboard main board): MCU marked HFD80CP100 (LQFP100), 229GNWDOa. This conflicts with the earlier assumption that the keyboard MCU is SONiX SN32F290; which board/chip carries the USB controller is unconfirmed.
+- S1B agent produced only hit_pages.csv, report.md, MANIFEST.csv (key_pages.txt, key_pages_index.md, questions.md missing); its "verification passed" covered only the three files it wrote. Hit pages: 0x7011 and 0xAA55 on p.128 and p.179; 0x700D on p.128, 177, 220, 303.
+
+## 2026-11-20 - UI_Editor-II manual pages 128, 164-166, 177-179, 181-187 (official)
+- Serial command frame: header 5A A5 (configurable), length = cmd(1)+addr(2)+data(2N)+CRC(2), cmd 0x10 write / 0x03 read / 0x41 touch feedback, variable address 0x0000-0x5FFF, write max 0x7D words, read max 0x7C words, data must be an even number of bytes; CRC-16/MODBUS over cmd+address+data only (not header or length), low byte first; fixed ACK 5A A5 04 10 FF 4C 30 (ok) / 5A A5 04 10 00 0C 70 (CRC fail), same for 03 (41 00 / 01 40). Verified with the manual examples (700E=1 -> 5F 00, =0 -> 9E C0).
+- Registers: 0x7000 page, 0x7001 brightness 0-63, 0x700B volume 0-16, 0x700C resistive calibration (0x005A), 0x700D key-code trigger, 0x700E auto backlight, 0x700F sleep brightness, 0x7010 sleep time (s), 0x7011 write 0xAA55 = enter serial update mode (needs bootloader support), 0x703F language, 0x7040 portrait/landscape UI, 0x7041 display test 1-3, 0x7042 UI project upgrade (Flash_RW-II), 0x7043 encoder page switch. Our earlier 0x2011/0x2000 numbers were the same registers without the 0x5000 offset.
+- Touch feedback: 5A A5 07 41 FF FF <returnValue 2 bytes> <CRC>, address fixed 0xFFFF for button-like controls, returnValue set by the user in UI_Editor (reportToHost is off by default). The 0x80-0xF6 command set belongs to the first generation UartTFT, not to this engine.
+- Chip marking (photo): HFD168BDP; Stream Deck core (button events, variable writes, page switch) works with the stock engine; dynamic icon replacement at runtime is not documented.
+
+## 2026-11-20 - UI_Editor-II manual pages 48-303 (official): control, icon and host mechanisms
+- Touch to host: Button/Popup/Variable Button/Multi-Variable Button have reportToHost (off by default); frame 5A A5 07 41 FF FF <returnValue> <CRC>; no separate press and release events (pressedIcon is appearance only). Multi-Variable Button writes up to 8 variables and can change page.
+- Host to screen: variable addresses 0x0000-0x1FFF (LT168A/B, 16 KB, 2 bytes per address; LT7689 0x0000-0x5FFF); text, number and icon controls follow variable values; string controls up to 2 KB.
+- Host presses a button: write the _triggerValue (0x0001-0xFFFF, unique per page) to register 0x700D; only Button, Popupbox, Variable Button, Multi-Variable Button, number/Chinese/English keyboard support it; with hostControl enabled the control stops reacting to touch and is not drawn (copy the control to keep touch).
+- Icons: no runtime download of new images; icon IDs refer to assets packed in UartTFT-II_Flash.bin; dynamic icon change = choose among preloaded images by variable value.
+- Register table for LT168A/B (p.303): 0x7000 page, 0x7001 backlight, 0x7002-0x7007 time, 0x7008 time confirm, 0x700A WAV, 0x700B volume, 0x700C resistive calibration, 0x700D key code trigger, 0x700E auto backlight, 0x700F sleep brightness, 0x7010 sleep time, 0x7011 serial upgrade, 0x703F language.
+- The slide menu (sliding select) widget works only on LT168 RGB screens, not on LT168B MCU screens (p.117).
+
+## 2026-11-20 - UI update route in the manual (Flash_RW-II over USB Vcom)
+- Manual p.250: "Update UI project with Flash_RW-II": open the com port, Input Bin, update; limit: only UartTFT-II_Flash.bin, not Mcu_Code.bin. p.247-249: requires an Mcu_Code.bin that supports reading and writing the external SPI Flash and MCU Flash over Uart/Vcom/HID. p.281: UI_Debugger-II sends 10 70 11 AA 55 (full frame 5A A5 ...) to enter serial upgrade, then Update MCU / Update Flash. p.221-222: HID/Vcom need the matching Mcu_Code (module_select.h switches).
+- Flash_RW-II is not in the extracted UI_Editor-II_V3.20 folder; whether the unit's V2.2 Mcu_Code accepts it is unverified (the stock parsers do have 0x61-0x67 flash commands). hidDeviceID.ini lists EEEF PID 2929/1616/1617/1618 for the HID mode; the unit (EEEF:268A, CDC) must use the Uart tab.
+- Correction: lastbin_path.ini holds a project folder path of the vendor developer (user 13781), not a bin file; the earlier inference "UI_Debugger remembers a bin" is withdrawn.
+
+## 2026-11-20 - manual p.245-251, p.276-284: serial UI update procedure
+- p.250 UI project update over serial: (1) send 5A A5 07 10 7042 0001 9E D7 (screen enters receive mode, close the serial tool), (2) Flash_RW-II: Open Com Port, Input Bin, (3) Write Addr 0, target SPI Flash, Write, (4) send 5A A5 07 10 7042 0000 5F 17 to return to normal. Limit: only UartTFT-II_Flash.bin, not Mcu_Code.bin. CRC-16/MODBUS verified on both frames (D79E and 175F, low byte first).
+- Flash_RW-II (p.245-246): read up to 2 KB, check = CRC-32 of a range, write from a bin file at an address, target MCU Flash or SPI Flash; needs Mcu_Code with Uart/Vcom/HID flash read/write (module_select.h UARTBUS_OPTION 0/4/3).
+- p.281-284: 10 70 11 AA 55 enters the bootloader serial update, then LT_Uart_GUI updates Mcu_Code and Flash (this tool writes MCU code); Flash.ini example W25N01GV 0xEFAA21 65536 2048 matches the unit's flash.
+- Unverified for the unit: 0x7042 handling in V2.2, protocol equality of Flash_RW-II with the stock 0x61-0x65 commands, availability of Flash_RW-II (not in the downloaded package).
+
+## 2026-11-20 - LT268x/269 update manual pages 3-6: LT_VCOM_GUI
+- Levetop update flow (LT268x/269 manual): the bootloader is programmed at the factory; MCU_Code.bin (internal flash) and UartTFT_Flash.bin (external SPI flash) are updated with LT_VCOM_GUI (USB virtual serial) or LT_Uart_UI (UART), SD card (UartTFT_Flash only) or USB stick. LT_VCOM_GUI has Input File for both files, Update All / Update MCU / Update Flash, Check Mcu CRC, Flash Info, Check Flash CRC, Erase whole flash, Run Uart Application.
+- Entering update mode: pull the BUSY pin low, then connect USB; leaving: Run Uart Application or RST (the tool then no longer sees the port). This matches the unit's behaviour (FN X 0 6 puts the screen into the bootloader, only a power cycle returns): the keyboard most likely drives a BUSY-like line of the screen (INFERENCE).
+- Flash info shown by the tool (example): FlashID 0xef4018, size 16777216, name W25Q128FV; the unit would show 0xefaa21, 134217728, W25N01GV.
+- This is the LT268 family manual; compatibility of LT_VCOM_GUI with the unit's bootloader (id 0x1971168B) is unverified.
+
+## 2026-11-20 - UI image compatibility check (aula_ui_compat.py, offline)
+- Factory UI image (127599044 bytes, sha256 4cb3fa5c...): L = 10704364, CRC rule MATCH, config 320x480, editor strings V2.30 / V2.20 at 0xA4 / 0xB0.
+- Levetop demo (LT168B Four In One 480x272 V3.10, 70751298 bytes): L = file size, CRC rule MATCH, config 480x272, strings V3.10000 / V1.00000; extra fields at 0x94-0x9F (zero in the factory image).
+- Same family: identical table 0xC2-0x16B and font index from 0x180. The unit's UI was compiled with UI_Editor-II V2.30; a V2.30 editor exists in the SDK (UI_Editor-II_V3.20\platforms\UI_Editor-II_V2.3020240116-1.exe, 3772928 bytes, not yet run). Plan: compile the minimal UI with V2.30 to match the format.
+
+## 2026-11-20 Screen UI bin format findings
+- UI_Editor-II V2.30 test builds (320x480): A_blank 0x21DE8, B_button 0x21DFC, C_button_tx 0x21DFC.
+- Header: 0x8C magic 5A A5 06 00, 0x90 = 320x480, 0xA4 editor ver, 0xB0 project ver, 0x174 = total image length (verified on 5 files).
+- 16-byte integrity field at 0x16C-0x173 + 0x178-0x17F; not plain MD5. Always build via UI_Editor; never hex-patch.
+- Button record 19 bytes; flags byte bit6 (0x40) = serial return enable; X1,Y1,X2,Y2,return value LE16.
+- Official UartTFT-II_Flashl99.bin (evbunpack of Screen reset firmware.exe), 127,599,044 bytes:
+  img1 @0x0 (0xA355EC), zero fill to ~0x3E355EC, data ~0x3E355EC-0x5B10000, img2/3/4 identical (SHA256 62BA430E...) @0x5B10000/0x65455EC/0x6F7ABD8.
+- Status: no flash performed.
+- Official bin data region starts exactly at 0x4000000 (64 MiB): records of [u32 len=0x4B000][u16 w=320][u16 h=480][RGB565], ~92 frames est. No GIF/PNG/JPEG/RIFF signatures; BM hits likely false positives.
+- img1 vs img2: only header (22 bytes) and +0x30 section (0x622A84, 569 entries) to end differ; pages/touch identical. Baseline = img1 @0x0 (assumed active).
+- ISP payload (evbunpack of L99_ISP_CNUI_V1.23_156): UartTFT-II_Flash.bin 0x5B0D07C (sha256 903A4FBA...) = img2 + zero fill to 0x4000000 + resource region identical to full official bin (tail zeros trimmed). Verified.
+- ISP folder also contains Flash.ini (JEDEC table: id, page size, page count), HFD_Code_V2.2.bin (A...0x4AA88), HFD_Code_V2.3.bin (0x4C934), HFD_ISP_TOOL_V1.31.exe. Tool strings reference relative /Flash.ini, /UartTFT-II_Flash.bin, /HFD_Code_V2.x.bin, size check vs flash IC, and FileCRC/FlashCRC verify.
+- Inference: screen flash >=128 MiB, likely 1 Gbit SPI NAND. Plan: stage 0 composite bin (custom UI + official resource region), stage 1 reflash official bin via unpacked tool with Procmon, stage 2 custom flash.
+- Status: no flash performed.
+- Stage 0 composite built: isp_stage\custom_c\UartTFT-II_Flash.bin size 0x5B0D07C, sha256 3B27223F7AAD8CB5E77F578A3825C48EE5892AACD272F3117237EB1EB83EFB4A. Image 0x0-0x21DFC = C_button_tx (7A793941...), zero fill to 0x4000000, resource region identical to official. isp_stage\official verified (903A4FBA...).
+- Status: no flash performed.
+- REA boot_safety_v2 static: custom_c has 1 page (no page 29), varinit 0x11DD0 all zero vs 34 non-zero bytes in official, other sections empty. custom_c confirmed NOT flash-safe. HFD_Code_V2.2 refs: 0x6000F000 @0x2504B, 0xAA55 @0x1416/0x14D6 (early code, possible pre-UI update check, unverified). Emulator build failed (missing libc6-dev); rerun after build-essential.
+- REA boot_safety_v2 emulator (kei825 cemu, stock HFD_Code_V2.2): both official and custom_c NAND boot without halt, answer UART (33 70 00 00 00, read 0x7000). custom_c ignores page 1 (stays page 0). 0x7011=0xAA55 sets 0x6000F000 0->FFFFFFFF and jumps to bootloader 0x60000100 for BOTH -> update mode reachable regardless of UI content (emulator evidence, not hardware-verified).
+- custom_c still not flashed: low test value (no page 1). Next: choose 30-page UI_Editor project (stock HFD) or kei825 custom HFD firmware route.
