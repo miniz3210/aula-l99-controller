@@ -2,6 +2,62 @@
 
 ## Unreleased
 
+### 2026-11-21 - AutoResearch and UI/NAND U6
+
+#### A. AutoResearch
+
+- Established unattended Ubuntu REA research workflow.
+- Completed AutoResearch v1-v5 research cycles.
+- Implemented resumable local analysis and evidence gates.
+- Used Ghidra 12.1.4, Python and MCore emulator.
+- Reduced dependence on token-heavy interactive agents.
+- Maintained read-only and no-flash safety boundaries.
+
+#### B. Device Firmware Research
+
+- Identified a 1396-byte RAM-relocated code block.
+- Destination address: 0x00800000.
+- Executable entry: 0x00800004.
+- V2.2/V2.3 relocated bytes match.
+- Strong static evidence supports a serial-flash-style programming routine.
+- Observed command-like values 0x06, 0x05 and 0x02.
+- Observed 24-bit address transfer.
+- Observed 256-byte page-boundary splitting.
+- Physical flash partition and recovery protection remain unresolved.
+
+#### C. UI/NAND Research U1-U5.1
+
+- Official UI image contains 30 pages, indices 0-29.
+- Corrected the 12-byte page record structure.
+- Widget record header is 5 bytes.
+- Touch record header is 3 bytes.
+- Record type uses little-endian 16-bit values.
+- Payload length uses the final header byte & 0x7F.
+- Decoded 385 widget record boundaries.
+- Decoded 187 touch record boundaries.
+- Achieved 30/30 widget and touch record round-trips.
+- Corrected the earlier invalid inferred touch pointers.
+
+#### D. U6 Touch Validation
+
+- Page 21 contains 18 touch records.
+- 17 Type 0xC001 button records.
+- One Type 0x8001 navigation record.
+- All 17 button records matched expected emulator events.
+- Event IDs range from 0x30 to 0x40.
+- UART body format: 41 FF FF 00 XX.
+- Navigation record changed Page 21 to Page 1.
+- Classification: VERIFIED OFFLINE.
+- Physical hardware transport remains unverified.
+
+#### E. Safety
+
+- No custom firmware flashed.
+- No custom UI image flashed.
+- Independent recovery remains unresolved.
+- Physical flash protection boundaries remain unresolved.
+- Custom firmware flashing remains NO-GO.
+
 ### AULA L99 screen research summary (2026-11-20)
 
 #### Confirmed

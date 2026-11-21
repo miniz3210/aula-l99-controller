@@ -6,32 +6,49 @@ Windows-oriented research and tooling for turning the AULA L99 keyboard touchscr
 
 This is an active reverse-engineering and prototyping project. The present milestone is:
 
-- Factory screen resource image extracted from an official AULA reset package.
-- UartTFT-II_Flash.bin independently verified by size and SHA-256.
-- Factory UI parsed successfully.
-- Page 21 confirmed as the built-in Mini Numpad.
-- All 17 touch zones, return codes, rectangles, and normal/pressed icon descriptor pairs mapped.
-- Offline-only ARGB4444 encoder and working-copy patcher added for NumPad 1 descriptors 341/342
-  (scripts/patch_l99_numpad_icon.py). Factory image is never modified.
-- HFD Code V2.3 target identity verified: 313,652 bytes, SHA-256 A76806ADA9648D2672BBEBEAD8A9BB396C0BC6F3A0A071E22E99001AC3359D03.
-- Type 3 is a 14-byte serialized UI record family with parsed fields: variable, x, y, first_icon, last_icon, min_value, max_value.
-- Multi-state Type 3 records exist, disproving the earlier universal two-state claim.
-- Little-endian M*Core is the strongly supported working architecture for HFD Code V2.3, based on structural and third-party implementation evidence (not Levetop vendor-confirmed).
-- Existing third-party M*Core decoder (mcdis.py) has passed bounded structural validation across four regions (95% linear mnemonic coverage, 16/16 branch targets in-image and aligned).
-- Native Type 3 runtime mapping and dispatcher remain unverified.
-- No claim of safe firmware modification or flashing follows from this analysis.
-- Current hardware-write status remains blocked pending offline patch validation and recovery review.
-- REA host `rea` (10.1.0.107) confirmed reachable via `plink.exe -batch -i $env:USERPROFILE\.ssh\aula-rea.ppk reauser@10.1.0.107 "hostname"` → `rea`.
-- V4 full-firmware analysis pipeline completed: PIPELINE_COMPLETED; 19463 functions attempted, 19460 decompiled, 3 failed; RUNTIME_LCD_UNVERIFIED.
-- SerialPortTool Targeted Deep V1: COMPLETED (34 jobs, 0 failures); targets 0x408c10, 0x407ad0, 0x407dc0, 0x407ef0, 0x408250, 0x4087e0; Verdict: TARGETED_EVIDENCE_COLLECTED.
-- Safe Flash Blockers V1: COMPLETED (18 jobs, 0 failures); Safety verdict: SAFE_FLASH_NOT_READY.
-- Owner and Marker V1: COMPLETED (2 jobs, 0 failures); Safety verdict: SAFE_FLASH_NOT_READY; MARKER_XREF 60026e60 -> 6000f000 type=DATA owner=NONE.
-- C_FINAL_REPORT.md: INSUFFICIENT_EVIDENCE; 49/49 CALLIND sites unresolved; 0/49 resolved LOAD address or validated literal value.
-- D_FINAL_REPORT.md: 221 unowned regions, 21666 unowned instructions, 100 high-confidence CFG candidates (≥8), 84 medium (5-7), 0 low, 67 code/data boundary conflicts.
-- HM3_FINAL_REPORT.md: DeviceDriver.exe static analysis — GetPrivateProfileStringW reads CPU_Temperature/GPU_Temperature from `C:\Program Files (x86)\AULA L99\data.ini`; HID via WriteFile/DeviceIoControl; no HidD_SetFeature/GetFeature; exact 64-byte report layout not fully reconstructed due to XOR obfuscation.
-- HM4B_FINAL_REPORT.md: WriteFile callsite 0x004707AA in FUN_00470670 (may contain XOR); DeviceIoControl callsite 0x0045EE87 with IOCTL 0xB0192 in FUN_0045ee50; USB G3 Type C: begins `00 01 5A 1A`, ends `AA 55`.
-- B_FINAL_ACCEPTANCE.md: SQLite reconciliation defect fixed in reconcile_calls.py (duplicated write block removed); 9 JSONL ownership rows.
-- P21_FINAL_ACCEPTANCE.md: Page 21 Mini Numpad descriptor schema VERIFIED_STATIC; 19-byte record layout; numpad_1 at header offset 0x00024CA9, payload offset 0x00024CAC; unpressed=341 (0x0155), pressed=342 (0x0156), goto=0xFFFF.
+### Primary objective
+
+Turn the wired AULA L99 320x480 screen into a Stream Deck-like programmable controller.
+
+### Preferred architecture under investigation
+
+Stock screen firmware +
+Custom UI/NAND resources +
+Host-side input/output bridge +
+Macro Deck or Bitfocus Companion
+
+This architecture is NOT yet fully implemented.
+
+### Current capabilities
+
+VERIFIED STATIC:
+- 30-page UI structure.
+- Widget/touch record boundaries.
+- RAM-relocated programming routine.
+- Page 21 touch rectangles and event identifiers.
+
+VERIFIED OFFLINE:
+- Page 21 17/17 button event mapping.
+- UART body 41 FF FF 00 XX.
+- Page 21 to Page 1 navigation.
+
+UNRESOLVED:
+- Physical USB touch-to-host transport.
+- Complete reportToHost protocol.
+- Widget/resource/variable semantics.
+- Full UI image serializer.
+- Image checksum coverage.
+- Adding a 31st page.
+- Macro Deck integration.
+- Independent bootloader recovery.
+
+### Safety decision
+
+Offline UI research: GO.
+Emulator-only UI mutation: HOLD.
+Custom firmware flashing: NO-GO.
+
+Do not claim a working physical Stream Deck controller.
 
 ## Screen research summary (2026-11-20)
 

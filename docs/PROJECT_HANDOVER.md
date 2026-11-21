@@ -3122,4 +3122,144 @@ Review overnight REA output, map conclusions to reproducible evidence, decide if
 - Screen research summary section added to README.md.
 - Safety constraints in sections 11, 23, 26, and 39.15 remain in force.
 
+## 2026-11-21 - AutoResearch and UI/NAND U6 Checkpoint
+
+### A. Research Overview
+
+Record AutoResearch v1-v5 and UI/NAND U1-U6.
+
+### B. Device-side Findings
+
+- RAM-relocated code size: 1396 bytes.
+- Relocation destination: 0x00800000.
+- Entry: 0x00800004.
+- V2.2/V2.3 relocated content identical.
+- Serial-flash-style programming evidence.
+- 256-byte programming boundary.
+- Physical flash region unresolved.
+
+### C. Important Corrections
+
+1. 0x00800004 is supported as relocated executable
+   code, not a proven fixed Boot ROM API.
+
+2. 0x6000F000 semantics remain unresolved.
+
+3. Correct 32-bit arithmetic:
+
+   (0x6000F000 + 0xA0000000) & 0xFFFFFFFF
+   = 0x0000F000
+
+4. Failure to identify a separate bootloader
+   does not prove that none exists.
+
+5. Ghidra virtual memory blocks do not establish
+   physical flash partitions.
+
+6. Earlier inferred Touch Blob offsets were wrong.
+
+### D. Correct UI/NAND Page Record
+
+12-byte record:
+
+Offset 0x00:
+Widget start, u32 little-endian.
+
+Offset 0x04:
+Widget length, u16 little-endian.
+
+Offset 0x06:
+Touch start, u32 little-endian.
+
+Offset 0x0A:
+Touch length, u16 little-endian.
+
+Widget header:
+5 bytes.
+
+Touch header:
+3 bytes.
+
+Record type:
+u16 little-endian.
+
+Payload length:
+final header byte & 0x7F.
+
+### E. UI/NAND Record Results
+
+Official pages:
+30, indices 0-29.
+
+Widget records:
+385.
+
+Touch records:
+187.
+
+Widget round-trip:
+30/30 pages.
+
+Touch round-trip:
+30/30 pages.
+
+### F. Page 21 U6 Results
+
+17 Type 0xC001 button records.
+
+Event IDs:
+0x30 through 0x40.
+
+Emulator validation:
+17/17 MATCH.
+
+UART body:
+41 FF FF 00 XX.
+
+One Type 0x8001 navigation record.
+
+Navigation:
+Page 21 -> Page 1.
+
+Classification:
+VERIFIED OFFLINE.
+
+Do not claim physical USB verification.
+
+### G. Remaining Blockers
+
+- Complete widget/resource/variable decoder.
+- Complete reportToHost transport.
+- Full UI image serializer.
+- Image checksum coverage.
+- Page-count expansion.
+- Emulator-only modified UI image.
+- Physical flash partition mapping.
+- Independent recovery after corrupted application.
+
+### H. Safety Decision
+
+Offline UI reverse engineering:
+GO.
+
+Emulator-only mutation:
+HOLD until serializer/checksum gates pass.
+
+Custom UI flashing:
+NO-GO.
+
+Custom MCU firmware flashing:
+NO-GO.
+
+### I. Next Planned Task
+
+U7:
+
+1. Widget/resource/variable decoder.
+2. Full UI image serializer and checksum.
+3. Page-count expansion analysis.
+4. Emulator-only mutation after evidence gates pass.
+
+Do not execute U7 during this task.
+
 ## External Research Reconciliation and New-Chat Handover
