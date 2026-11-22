@@ -1,3 +1,18 @@
+
+
+### Current product direction (2026-11-22 checkpoint)
+
+The target is a **real Stream Deck-style AULA L99**, not a numpad key remapper: a Windows visual editor defines icons, button geometry, actions, profiles, and feedback; the L99 displays custom UI/NAND resources and returns device-specific touch events; Windows updates state/variables and integrates with Companion, Macro Deck, or another open-source macro engine.
+
+**Preferred development architecture:** stock screen MCU firmware + custom UI/NAND + dedicated bidirectional Windows bridge. A replacement MCU firmware is a fallback, not the default. The official screen flash workflow has worked, but custom image deployment and recovery remain gated.
+
+**Verified offline:** 30-page factory UI structure (385 widget, 187 touch records); Page 21 Mini Numpad 17/17 touch-to-UART events; Page 22 Calculator rendering `12+3=15`; reproducible factory-image header CRC rule. **Unresolved:** complete mutable UI serializer/relocation, host Type 1/Type 3 variable semantics, dedicated touch transport, independent recovery, safe custom image acceptance, production-ready editor/bridge. Reproducing a CRC is not proof that a modified image is accepted or recoverable.
+
+**S1-S5 checkpoint:** S1/S2 structural research partially accepted; S3 variable command not established; S4 HID bridge evidence accepted with limitations; S5 page ranking rejected because it confused Page 21 (Mini Numpad) with Page 22 (Calculator), mislabeled Play, and used stale evidence. Page 19 (Real-time Data), Page 20 (Play), and low-record pages are candidates for bounded investigation, not approved modification targets.
+
+**Next workstreams:** (1) UI/NAND builder and emulator-only custom layout validation, (2) dedicated L99 touch transport, (3) variable-driven icon/text feedback, (4) Windows editor/macro integration, (5) controlled UI-only deployment/recovery validation. Physical custom firmware/UI flashing remains NO-GO pending an explicit evidence-gated decision.
+
+Research outputs suitable for version control belong under `u76/s1`, `u76/s2`, etc., in this repository; vendor binaries, large captures, temporary emulator images, and Ghidra caches stay local/ignored. See the latest checkpoint in `docs/PROJECT_HANDOVER.md`.
 # AULA L99 Touchscreen Reverse Engineering and Stream Deck Bridge
 
 Windows-oriented research and tooling for turning the AULA L99 keyboard touchscreen into a Stream Deck-style controller.

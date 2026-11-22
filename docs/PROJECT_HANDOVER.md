@@ -1,3 +1,47 @@
+
+
+### 2026-11-22 - U7.1-U7.5 and S1-S5 Product Direction Checkpoint
+
+**Baseline:** `331a2e1` (2026-11-21 U6 documentation checkpoint). This section records subsequent analysis and review; it does not assert that later research outputs were already committed or that physical custom firmware was flashed.
+
+**Objective:** Build a full AULA L99 Stream Deck: Windows visual layout editor, freely configurable icons/touch buttons, unique device-scoped events, profiles/folders, live feedback/widgets, reliable USB reconnection, macro-engine integration, and reproducible UI deployment/recovery. Numpad remapping alone is not sufficient.
+
+**Architecture decision:** Prefer stock screen MCU runtime + modified UI/NAND + dedicated Windows input/variable bridge + open-source macro engine. Keep custom MCU firmware as a fallback. Official firmware flashing was previously successful; that is not proof of safe arbitrary custom-image flashing.
+
+**Confirmed / accepted within stated scope**
+- Factory UI: 30 pages (0-29), 385 widget records, 187 touch records. Page record 12 bytes; widget/touch headers 5/3 bytes. Page 21 is Mini Numpad; Page 22 is Calculator.
+- U6: Page 21, 17/17 `0xC001` touch events returned expected UART IDs `0x30-0x40` in emulator; navigation Page 21 to Page 1.
+- U7.1: factory image CRC rule reproduced offline (0x174 length, 0x178 CRC, 0x17C complement, blank 0x174-0x17F with FF). Structured emission and opaque preservation do not establish complete semantic serialization or safe deployment.
+- U7.2: Calculator emulator sequential `1 2 + 3 =` displayed `12+3`, then `15`; 18 `0xC001` buttons plus navigation; observed generic `41 FF FF 43 4C` UART output on captured calculator steps. Type 1 record at NAND offset 0x24E59 begins `0x0218`, but binding remains INFERRED.
+- U7.3: bounded RAM byte changes observed, not an instruction writer identity.
+- U7.4: focused Ghidra J04 succeeded after Scalar import fix, 121825 instructions/255 matches; `0x16` matches must not be equated with Page 22 without operand provenance.
+- U7.5: static control-flow inventory completed; breakpoint-based emulator trace produced no hits at three preselected function entries. It did NOT prove the absence of calculator writers or variable transport.
+
+**S1-S5 audit decisions**
+- S1 PARTIAL ACCEPTED: 30-page structural inventory, incomplete semantic/functional map. Page 19 dynamic data; Page 20 Play; Page 21 Mini Numpad; Page 22 Calculator. Other page names may be photo-correlated only.
+- S2 PARTIAL ACCEPTED: packed widget/touch records; no in-place growth gap. Same-size replacement PASS STRUCTURAL ONLY; relocation/widget growth and new page index 30 HOLD. Page count hardcoding not established.
+- S3 PARTIAL ACCEPTED: no direct 0x0218 HFD V2.2 constant matches, but indirect table/variable lookup remains possible; host-controlled widget not disproven, remains UNRESOLVED.
+- S4 ACCEPT WITH CORRECTIONS: physical keyboard HID evidence and offline bridge foundations exist; 17/17 U6 is emulator UART evidence, not physical end-to-end touch-to-PC correlation. Dedicated arbitrary touch transport unresolved.
+- S5 REJECT RECOMMENDATION: confused Page 21/22 and Play; used stale U6/U7.1 evidence and invalid nonstandard JSON numeric hex literals. Do not trust S5 ranking or use its target page IDs.
+
+**External evidence**
+- kei825/aula-l99-screen-fw: emulator, disassembler, parser/tooling reference; do not assume latest upstream code was audited or proprietary runtime reproduced.
+- softce/aula-l99-research: third-party physical custom UI/NAND and Windows serial variable updates reported; demonstrates feasibility on another device, not proof of compatibility or recovery on this unit.
+
+**Decision gates**
+- Product research and emulator-only custom UI development: GO.
+- Dedicated touch bridge, host-controlled variable/icon feedback: RESEARCH / UNRESOLVED.
+- New widget/page insertion: HOLD pending relocation, runtime and integrity evidence.
+- Physical custom UI or MCU flash: NO-GO pending explicit controlled approval based on image acceptance, write scope, recovery/rollback and device compatibility.
+
+**Next planned tasks (bounded and parallel where independent)**
+1. UI/NAND builder: reproducible image emission, relocation constraints, custom icon/touch layout, emulator rendering/regression.
+2. Dedicated touch transport: screen USB/keyboard HID separation, device-scoped events, Windows bridge mapping.
+3. Dynamic feedback: Type 1/3 semantics and verified host-to-screen variable updates; no guessed UART writes.
+4. Windows editor and Companion/Macro Deck integration, with mock/simulator-first tests.
+5. UI-only deployment/recovery evidence gates before any physical custom write.
+
+**Workflow**: REA `reauser@10.1.0.107`, PuTTY PPK `$env:USERPROFILE\.ssh\aula-rea.ppk`. Agent sessions are bounded, 20k-40k target, 80k hard ceiling; do not repeat U1-U7.5. Put useful final artifacts in `C:\temp\aula-l99-controller\u76\s1` etc., not loose under C:\temp. Exclude vendor firmware/captures/Ghidra caches. The owner controls commits and pushes.
 # AULA L99 Project Handover
 
 Continue this project from the verified state below. Do not restart the reverse engineering from scratch and do not repeat tests already marked verified.
