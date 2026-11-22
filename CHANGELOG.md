@@ -1127,3 +1127,55 @@ Next:
 - REA boot_safety_v2 static: custom_c has 1 page (no page 29), varinit 0x11DD0 all zero vs 34 non-zero bytes in official, other sections empty. custom_c confirmed NOT flash-safe. HFD_Code_V2.2 refs: 0x6000F000 @0x2504B, 0xAA55 @0x1416/0x14D6 (early code, possible pre-UI update check, unverified). Emulator build failed (missing libc6-dev); rerun after build-essential.
 - REA boot_safety_v2 emulator (kei825 cemu, stock HFD_Code_V2.2): both official and custom_c NAND boot without halt, answer UART (33 70 00 00 00, read 0x7000). custom_c ignores page 1 (stays page 0). 0x7011=0xAA55 sets 0x6000F000 0->FFFFFFFF and jumps to bootloader 0x60000100 for BOTH -> update mode reachable regardless of UI content (emulator evidence, not hardware-verified).
 - custom_c still not flashed: low test value (no page 1). Next: choose 30-page UI_Editor project (stock HFD) or kei825 custom HFD firmware route.
+
+## 2026-11-22 - A2-R7-H5 Visible Resource and Touch Integration
+
+### Summary
+- Completed A2-R7-H5 offline integration validation.
+- Confirmed that one modified UI/NAND image can produce both a visible framebuffer change and a modified UART touch event.
+- Acceptance status: PASS_VISIBLE_RESOURCE_AND_TOUCH.
+- Evidence classification: VERIFIED OFFLINE.
+
+### Verified Results
+- Target: Page 21 Mini Numpad.
+- Resource: Bank 0, ID 21.
+- Resource address: 6624228.
+- Resource size: 338 bytes.
+- Resource dimensions: 13x13.
+- Resource format: 2.
+- Reproducible framebuffer change: 5 pixels.
+- Changed region: (256,14)-(261,15).
+- Touch record offset: 150602.
+- Touch center: (198,440).
+- Original UART event: 0x40.
+- Modified UART event: 0x41.
+- Page remained 21 after touch.
+- Original UI/NAND image preserved.
+
+### Candidate Image
+SHA-256:
+66c276756646a642e28e082ae53cfcb5d67689295388c5cb27060a9eb3d291e0
+
+### Limitations
+- The visible resource change affects the upper status area.
+- The modified resource has not been proven to belong to the selected button icon.
+- Arbitrary custom icon generation remains unresolved.
+- Custom 4x4 UI/NAND image generation remains incomplete.
+- Physical USB integration remains unverified.
+- Physical custom flashing remains NO-GO.
+
+### Next Task
+A2-R7-H6: Visible Button Icon Replacement.
+
+Objective:
+Replace one existing Page 21 Mini Numpad button icon with
+a custom image while preserving touch UART behavior and
+Home navigation.
+
+Required acceptance:
+- Custom icon visibly rendered in stock CEmu.
+- Correct button touch UART event.
+- Home navigation preserved.
+- Deterministic image integrity validation.
+- No physical hardware writes.
+
