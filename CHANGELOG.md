@@ -1,5 +1,15 @@
 
 
+#### 2026-11-23 - OpenDeck Live Software Integration Checkpoint
+
+- **OpenDeck live integration (OD1-R2):** PASS_VERIFIED_LIVE_WINDOWS. AULA L99 4x4 virtual device registered; Rust Named Pipe IPC works; touch 0x50 triggered a real OpenDeck action; Google Open URL action executed.
+- **OpenDeck icon callbacks (OD1-R3-H1):** PASS_VERIFIED_LIVE_WINDOWS. Genuine OpenDeck setImage callbacks received; source image format identified as JPEG; JPEG decoded and normalized to PNG; callback count increased from 3 to 8; normalized PNG SHA-256 changed after icon change; Rust release build passed; existing touch IPC preserved.
+- **OpenDeck screen backend (OD2-B-R2):** PASS_VERIFIED_LIVE_WINDOWS_TO_MOCK. Rust plugin published genuine callback events; local callback spool verified; Python CallbackSpoolConsumer processed events; 30 CLEAR_POSITION events accepted; 2 SET_IMAGE events accepted; events archived; no quarantined events in observed processing; PNG converted to RGB565 little-endian; output size 19,200 bytes per 80x120 image; RGB565 SHA-256 4054fd8bf8d20d967ac923cd940056a4e90e2b096ea93e54cbea6d4acafedef4; MockTransport received one image update; duplicate suppression worked.
+- **MockTransport PASS does not mean physical L99 screen output is verified.**
+- **Pending:** OD2-A-R1 Real Named Pipe Input Adapter integration; HW2 physical touchscreen transport testing; physical L99 icon/framebuffer delivery unverified.
+- **Firmware research (unchanged):** Keyboard SN32F290 extracted/reconstructed; two updater copies byte-identical; USB descriptor candidate VID 0C45/PID 8801 vs physical wired L99 VID 0C45/PID 800A — active physical keyboard firmware identity UNRESOLVED; SN32F290 native runtime RE on HOLD pending identity confirmation. Screen HFD_Code_V2.2.bin identified; chunk writer and CRC table have static/deterministic evidence; exact physical wire protocol and recovery unverified. Physical flashing: NO-GO.
+- **Constraints:** preserve physical Numpad behavior, stock Mini Numpad functionality, existing Home Navigation, original firmware, device recovery capability. Do not claim 4x4 mock layout is safe for physical screen deployment.
+
 #### 2026-11-22 - U7.1-U7.5 and S1-S5 Product Direction Checkpoint
 
 - **Product goal:** a true AULA L99 Stream Deck-style controller with Windows visual editor, arbitrary custom icons/layouts, independently identifiable touch actions, bidirectional feedback, profiles, and deployment/recovery. HID numpad remapping alone is not an acceptable final product.

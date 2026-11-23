@@ -3306,4 +3306,78 @@ U7:
 
 Do not execute U7 during this task.
 
+## 2026-11-23 - OpenDeck Live Software Integration Checkpoint
+
+### A. Verified Live Paths
+
+**OD1-R2 — PASS_VERIFIED_LIVE_WINDOWS**
+- AULA L99 4x4 virtual device registered in OpenDeck.
+- Rust Named Pipe IPC works (`\\.\pipe\aula-l99-od1-test`).
+- Touch event 0x50 triggered a real OpenDeck action.
+- Google Open URL action executed.
+
+**OD1-R3-H1 — PASS_VERIFIED_LIVE_WINDOWS**
+- Genuine OpenDeck setImage callbacks received from the running plugin.
+- Source image format identified as JPEG.
+- JPEG decoded and normalized to PNG.
+- Callback count increased from 3 to 8.
+- Normalized PNG SHA-256 changed after icon change.
+- Rust release build passed.
+- Existing touch IPC preserved.
+
+**OD2-B-R2 — PASS_VERIFIED_LIVE_WINDOWS_TO_MOCK**
+- Rust plugin published genuine callback events.
+- Local callback spool verified.
+- Python CallbackSpoolConsumer processed events.
+- 30 CLEAR_POSITION events accepted.
+- 2 SET_IMAGE events accepted.
+- Events archived; no quarantined events in observed processing.
+- PNG converted to RGB565 little-endian.
+- Output size: 19,200 bytes per 80x120 image.
+- RGB565 SHA-256: `4054fd8bf8d20d967ac923cd940056a4e90e2b096ea93e54cbea6d4acafedef4`.
+- MockTransport received one image update.
+- Duplicate suppression worked.
+
+**Important caveat:** MockTransport PASS does NOT mean physical L99 screen output is verified. Actual L99 icon/framebuffer delivery remains unverified.
+
+### B. Current Architecture (OpenDeck Live)
+
+- OpenDeck UI -> genuine setImage callback -> OD1 Rust plugin (Named Pipe IPC) -> callback spool (JSON + PNG) -> OD2-B Python consumer -> RGB565 conversion -> Mock L99 Screen Transport.
+- Touch event -> OpenDeck action (OD1-R2 verified end-to-end with Google Open URL).
+- Physical L99 touchscreen-to-host transport not yet integrated (OD2-A-R1 pending).
+- No physical USB writes; no second device registration; no second OpenDeck plugin process.
+
+### C. Important SHA Evidence
+
+- OD2-B-R2 RGB565 SHA-256: `4054fd8bf8d20d967ac923cd940056a4e90e2b096ea93e54cbea6d4acafedef4` (19,200 bytes per 80x120 image).
+- Keyboard SN32F290: two updater copies byte-identical firmware.
+- Keyboard USB descriptor candidate: VID 0C45, PID 8801.
+- Physical wired L99 observed: VID 0C45, PID 800A — active physical keyboard firmware identity UNRESOLVED.
+- Screen firmware: HFD_Code_V2.2.bin identified; chunk writer and CRC table have static/deterministic evidence; exact physical wire protocol and recovery unverified.
+
+### D. Pending Physical Hardware Gates
+
+- OD2-A-R1: Real Named Pipe Input Adapter integration (not started).
+- HW2: Physical touchscreen transport testing (not started).
+- Physical screen: actual L99 icon/framebuffer delivery unverified (NO-GO claim).
+
+### E. Firmware Identity Uncertainty
+
+- Keyboard SN32F290 native runtime RE is on HOLD pending identity confirmation.
+- Active physical keyboard firmware identity remains UNRESOLVED (candidate VID 0C45/PID 8801 vs observed VID 0C45/PID 800A).
+- Physical flashing: NO-GO. Do not claim firmware flashing is safe.
+
+### F. Next Bounded Tasks
+
+1. OD2-A-R1: Real Named Pipe Input Adapter integration (L99 touch events -> OpenDeck button events).
+2. HW2: Physical touchscreen transport testing.
+3. Physical L99 icon/framebuffer delivery verification (gated on HW2).
+4. Preserve physical Numpad behavior, stock Mini Numpad functionality, existing Home Navigation, original firmware, device recovery capability.
+
+### G. Safety Decision (Unchanged)
+
+- Physical custom UI flashing: NO-GO.
+- Custom MCU firmware flashing: NO-GO.
+- Do not claim 4x4 mock layout is safe for physical screen deployment.
+
 ## External Research Reconciliation and New-Chat Handover

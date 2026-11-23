@@ -10,7 +10,11 @@ The target is a **real Stream Deck-style AULA L99**, not a numpad key remapper: 
 
 **S1-S5 checkpoint:** S1/S2 structural research partially accepted; S3 variable command not established; S4 HID bridge evidence accepted with limitations; S5 page ranking rejected because it confused Page 21 (Mini Numpad) with Page 22 (Calculator), mislabeled Play, and used stale evidence. Page 19 (Real-time Data), Page 20 (Play), and low-record pages are candidates for bounded investigation, not approved modification targets.
 
-**Next workstreams:** (1) UI/NAND builder and emulator-only custom layout validation, (2) dedicated L99 touch transport, (3) variable-driven icon/text feedback, (4) Windows editor/macro integration, (5) controlled UI-only deployment/recovery validation. Physical custom firmware/UI flashing remains NO-GO pending an explicit evidence-gated decision.
+**OpenDeck live integration (2026-11-23 checkpoint):** PASS_VERIFIED_LIVE_WINDOWS for OD1-R2 (AULA L99 4x4 virtual device registered; Rust Named Pipe IPC works; touch 0x50 triggered a real OpenDeck action; Google Open URL action executed) and OD1-R3-H1 (genuine OpenDeck setImage callbacks received; JPEG source identified; JPEG decoded and normalized to PNG; callback count increased 3 to 8; normalized PNG SHA-256 changed after icon change; Rust release build passed; existing touch IPC preserved). OD2-B-R2 PASS_VERIFIED_LIVE_WINDOWS_TO_MOCK (genuine Rust callback events; local callback spool verified; Python CallbackSpoolConsumer processed 30 CLEAR_POSITION and 2 SET_IMAGE events; PNG converted to RGB565 little-endian, 19,200 bytes per 80x120 image; RGB565 SHA-256 4054fd8bf8d20d967ac923cd940056a4e90e2b096ea93e54cbea6d4acafedef4; MockTransport received one image update; duplicate suppression worked). MockTransport PASS does NOT mean physical L99 screen output is verified.
+
+**Pending OpenDeck tasks:** OD2-A-R1 Real Named Pipe Input Adapter integration; HW2 physical touchscreen transport testing; physical L99 icon/framebuffer delivery unverified.
+
+**Next workstreams:** (1) UI/NAND builder and emulator-only custom layout validation, (2) dedicated L99 touch transport, (3) variable-driven icon/text feedback, (4) Windows editor/macro integration, (5) controlled UI-only deployment/recovery validation, (6) OD2-A-R1 Named Pipe Input Adapter integration, (7) HW2 physical touchscreen transport testing. Physical custom firmware/UI flashing remains NO-GO pending an explicit evidence-gated decision.
 
 Research outputs suitable for version control belong under `u76/s1`, `u76/s2`, etc., in this repository; vendor binaries, large captures, temporary emulator images, and Ghidra caches stay local/ignored. See the latest checkpoint in `docs/PROJECT_HANDOVER.md`.
 # AULA L99 Touchscreen Reverse Engineering and Stream Deck Bridge
@@ -46,6 +50,11 @@ VERIFIED OFFLINE:
 - Page 21 17/17 button event mapping.
 - UART body 41 FF FF 00 XX.
 - Page 21 to Page 1 navigation.
+
+VERIFIED LIVE (OpenDeck, 2026-11-23):
+- OD1-R2: AULA L99 4x4 virtual device registered; Rust Named Pipe IPC works; touch 0x50 triggered a real OpenDeck action; Google Open URL action executed.
+- OD1-R3-H1: Genuine OpenDeck setImage callbacks received; JPEG source identified; JPEG decoded and normalized to PNG; callback count increased 3 to 8; normalized PNG SHA-256 changed after icon change; Rust release build passed; existing touch IPC preserved.
+- OD2-B-R2: Genuine Rust callback events; local callback spool verified; Python CallbackSpoolConsumer processed 30 CLEAR_POSITION and 2 SET_IMAGE events; PNG converted to RGB565 little-endian, 19,200 bytes per 80x120 image; RGB565 SHA-256 4054fd8bf8d20d967ac923cd940056a4e90e2b096ea93e54cbea6d4acafedef4; MockTransport received one image update; duplicate suppression worked. MockTransport PASS does NOT mean physical L99 screen output is verified.
 
 UNRESOLVED:
 - Physical USB touch-to-host transport.
