@@ -3507,3 +3507,64 @@ Do not execute U7 during this task.
 - Do not claim 4x4 mock layout is safe for physical screen deployment.
 
 ## External Research Reconciliation and New-Chat Handover
+
+## 41. FW-SAFE-C V2.2 Ghidra Project Locations
+
+Date: 2026-11-24
+
+IMPORTANT: These locations were rediscovered for the fourth time.
+Do not repeat the full Ghidra project search.
+
+### Primary V2.2 Project
+
+/home/reauser/rea-lab/work/aula_di_trace_correlate/work/ghidra_v22/v22.gpr
+
+### Alternative V2.2 Project
+
+/home/reauser/rea-lab/work/aula_patch_r1_mcore_r2/output/projects/v22/R2_V22.gpr
+
+### Firmware Identity
+
+File: HFD_Code_V2.2.bin
+Size: 305800 bytes
+SHA256: 432e358cac96fb930ab680ada6f953c9005027c58b31b7ee3bb6bc7868ef35cf
+Analysis base: 0x6000A000
+
+Verified stock firmware source:
+/home/reauser/rea-lab/work/aula_l99_deep_rea_v1/input/HFD_Code_V2.2.bin
+
+### Known Incorrect Project
+
+/home/reauser/rea-lab/work/l99-full-re-v6-combined/project/combined_v6.gpr
+
+This project contains HFD V2.3 at base 0x60010000.
+Do not use V2.2 addresses directly in this project.
+
+### Existing Analysis Artifacts
+
+/home/reauser/rea-lab/work/aula_di_trace_correlate/output/V22_FUNCTIONS.json
+/home/reauser/rea-lab/work/aula_di_trace_correlate/output/V22_CALLGRAPH.json
+/home/reauser/rea-lab/work/aula_di_trace_correlate/output/V22_MEMORY_MAP.json
+
+### Rules
+
+1. Do not repeat the global Ghidra project search.
+2. Reuse the primary V2.2 project first.
+3. Verify the loaded program identity before native analysis.
+4. Do not repeat completed DI-TRACE research.
+5. FW-SAFE-C must run unattended.
+6. Package execution success is not research success.
+7. Physical flash remains NO-GO.
+
+### AULA-L99-HW2-PHYSICAL-HID-2026-11-24
+
+- Product baseline remains 4 columns x 4 rows (16 OpenDeck buttons). A 4-column x 5-row (20-button) layout is a future improvement only, after first-version success. No dedicated OpenDeck entry button or page is required.
+- L99 Mini Numpad is a touchscreen virtual function, not a separate physical Numpad. Preserve original keyboard behavior and the stock virtual Mini Numpad outside OpenDeck routing.
+- Physical normal-mode USB capture: `C:\temp\aula-l99-capture\HW2_FINAL\HW2_FINAL_PHYSICAL_TOUCH.pcapng` (4,030,404 bytes; SHA-256 `B7677D354B837A6030BCEDB45688E0FCE7C858D79D69FBC9A2731C70EE15E8F4`). Operator action log: `HW2_ACTION_LOG.csv` (SHA-256 `E6A25740D5F559DD53DB4B9DF05FFEB1D251DACD5C37363B03DD51BE7BB3C9AF`). Both were hash-verified locally. Capture and action log are evidence, not source code and should not be committed.
+- USBPcap1 enumeration identifies Bus 1 Device 15 `EEEF:268A` (screen CDC, Windows COM6 at capture time) and Bus 1 Device 16 `0C45:800A` (keyboard/HID). COM port assignments can change.
+- Time-aligned Device 16 endpoint `0x82` HID reports contain 5-byte payloads beginning `06`; touchpad movement correlates with signed relative mouse deltas. Green and blue touchpad click tests produce `06 01 00 00 00` / `06 02 00 00 00`, followed by `06 00 00 00 00` release reports. These are physical capture observations, not absolute touchscreen X/Y coordinates.
+- Device 16 endpoint `0x81` carries 8-byte keyboard HID reports for touchscreen virtual Mini Numpad: key usages `0x59` (1), `0x5D` (5), and `0x58` (Enter), with zeroed release reports. Preserve exact action-log and frame provenance for future decoding.
+- Absolute 320x480 touch coordinates, independent 4x4 touch routing, and suppression of simultaneous Windows mouse events remain UNVERIFIED. Physical touchscreen-to-OpenDeck action path is NOT COMPLETE. Existing TOUCH-P1 33/33 offline tests do not establish physical touch transport.
+- Dynamic icon baseline: DI-PATCH-A-FINAL CEmu 14/14; A2-R2 agent-reported CEmu live closure; DI-D1 geometry/banding 4x4. Patch Engine P1 agent-reported 32/32 offline with exact golden SHA `df3a998b0c8cf7689610bc2dae63f4081a660e3d6b0b927f2dd3f92acb6310fe`, 16 patch operations and 327 actual changed bytes (historical 356-byte footprint is a different measure).
+- PATCH-SAFE-T1/T2: 149/149 bounded CFG instructions and modeled stack balance pass; full patch safety PARTIAL. FW-SAFE-C R4-R9 evidence closure complete. Independent bad-app recovery BLOCKED, interrupted-update recovery UNVERIFIED, physical flashing NO-GO.
+- Next engineering task: use the verified relative-mouse and virtual-Numpad HID report evidence to determine an independent absolute touch event route without mouse side effects. Do not repeat USB inventory, generic firmware RE, or completed capture analysis.

@@ -719,3 +719,16 @@ All findings are classified by evidence category:
 - Exact silicon identity and hardware revision of the user's unit remain unverified.
 
 Do not state: the user's unit physically contains HFD168BDP; HFD168BDP is definitively identical to Levetop LT168B; the user's flash is definitively W25N01GV; the user's panel controller is definitively ST7796S.
+
+### AULA-L99-HW2-PHYSICAL-HID-2026-11-24
+
+- Product baseline remains 4 columns x 4 rows (16 OpenDeck buttons). A 4-column x 5-row (20-button) layout is a future improvement only, after first-version success. No dedicated OpenDeck entry button or page is required.
+- L99 Mini Numpad is a touchscreen virtual function, not a separate physical Numpad. Preserve original keyboard behavior and the stock virtual Mini Numpad outside OpenDeck routing.
+- Physical normal-mode USB capture: `C:\temp\aula-l99-capture\HW2_FINAL\HW2_FINAL_PHYSICAL_TOUCH.pcapng` (4,030,404 bytes; SHA-256 `B7677D354B837A6030BCEDB45688E0FCE7C858D79D69FBC9A2731C70EE15E8F4`). Operator action log: `HW2_ACTION_LOG.csv` (SHA-256 `E6A25740D5F559DD53DB4B9DF05FFEB1D251DACD5C37363B03DD51BE7BB3C9AF`). Both were hash-verified locally. Capture and action log are evidence, not source code and should not be committed.
+- USBPcap1 enumeration identifies Bus 1 Device 15 `EEEF:268A` (screen CDC, Windows COM6 at capture time) and Bus 1 Device 16 `0C45:800A` (keyboard/HID). COM port assignments can change.
+- Time-aligned Device 16 endpoint `0x82` HID reports contain 5-byte payloads beginning `06`; touchpad movement correlates with signed relative mouse deltas. Green and blue touchpad click tests produce `06 01 00 00 00` / `06 02 00 00 00`, followed by `06 00 00 00 00` release reports. These are physical capture observations, not absolute touchscreen X/Y coordinates.
+- Device 16 endpoint `0x81` carries 8-byte keyboard HID reports for touchscreen virtual Mini Numpad: key usages `0x59` (1), `0x5D` (5), and `0x58` (Enter), with zeroed release reports. Preserve exact action-log and frame provenance for future decoding.
+- Absolute 320x480 touch coordinates, independent 4x4 touch routing, and suppression of simultaneous Windows mouse events remain UNVERIFIED. Physical touchscreen-to-OpenDeck action path is NOT COMPLETE. Existing TOUCH-P1 33/33 offline tests do not establish physical touch transport.
+- Dynamic icon baseline: DI-PATCH-A-FINAL CEmu 14/14; A2-R2 agent-reported CEmu live closure; DI-D1 geometry/banding 4x4. Patch Engine P1 agent-reported 32/32 offline with exact golden SHA `df3a998b0c8cf7689610bc2dae63f4081a660e3d6b0b927f2dd3f92acb6310fe`, 16 patch operations and 327 actual changed bytes (historical 356-byte footprint is a different measure).
+- PATCH-SAFE-T1/T2: 149/149 bounded CFG instructions and modeled stack balance pass; full patch safety PARTIAL. FW-SAFE-C R4-R9 evidence closure complete. Independent bad-app recovery BLOCKED, interrupted-update recovery UNVERIFIED, physical flashing NO-GO.
+- Next engineering task: use the verified relative-mouse and virtual-Numpad HID report evidence to determine an independent absolute touch event route without mouse side effects. Do not repeat USB inventory, generic firmware RE, or completed capture analysis.
