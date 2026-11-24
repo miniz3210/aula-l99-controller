@@ -1012,6 +1012,132 @@ Recorded in /home/reauser/rea-lab/work/full_firmware_re_v7_1:
 - Page 21 prototype evidence and limitations preserved.
 - All rejected and superseded firmware claims preserved.
 
+## 37.12 AULA L99 Native Runtime Instrumentation Checkpoint (2026-11-24)
+
+### 37.12.1 Git checkpoint
+- Previous verified Git checkpoint: 681d04da5a6eb47922312f24cb1594323a77ad97
+- Branch: main
+- Current HEAD verified before edits.
+
+### 37.12.2 DI-TRACE-NATIVE verified results
+- **Status:** PASS_NATIVE_EVENT_CAPTURE
+- **Firmware:** HFD_Code_V2.2.bin
+- **SHA-256:** 432e358cac96fb930ab680ada6f953c9005027c58b31b7ee3bb6bc7868ef35cf
+- **Firmware size:** 305800 bytes
+- **Stock NAND size:** 127599044 bytes
+
+**Verified:**
+- Process-isolated CEmu execution.
+- Page 1 successfully opened.
+- Page 21 successfully opened.
+- Native CEmu instrumentation executed.
+- 128173 sampled instruction events.
+- 30 UART RX events.
+- 356 LCD command events.
+- 2100 sampled LCD pixel writes.
+- 20 UART TX events.
+- 81798 NAND events.
+- Both child processes exited successfully.
+- No physical hardware writes.
+
+**Important limitations:**
+- These are sampled native events. They do not prove complete instruction coverage.
+- The instrumentation can record UART RX and LCD writer PCs, but a complete UART command to renderer to LCD dataflow has not yet been established.
+
+### 37.12.3 Previous MCore research (preserved)
+- HFD V2.2/V2.3 firmware identities.
+- MCore Ghidra native analysis.
+- Function maps.
+- High P-code evidence.
+- Instruction-level call graph.
+- MCORE-CALL-GATE.
+- MCORE-LIFT-FIX.
+- DI-DATAFLOW-CLOSURE.
+- DI-R2 bounded SSA analysis.
+- DI-NATIVE-CLOSURE.
+
+**Do not claim semantic closure.** The next task is to correlate actual runtime event PCs with MCore functions.
+
+### 37.12.4 OpenDeck status (verified live)
+- AULA L99 4x4 virtual OpenDeck device.
+- Named Pipe touch IPC.
+- Touch 0x50 triggering OpenDeck action.
+- Genuine OpenDeck setImage callbacks.
+- JPEG to PNG normalization.
+- Rust callback spool.
+- Python callback consumer.
+- RGB565 conversion.
+- MockTransport delivery.
+
+**DI-D1:** 21/21 offline tests PASS.
+
+**DI-D1 live integration remains pending.**
+**Physical dynamic icon output remains unverified.**
+**Physical touchscreen input remains unverified.**
+**Original physical Numpad functionality must be preserved.**
+
+### 37.12.5 Hardware and firmware status
+- Screen MCU: HFD168BDP hardware identity remains a candidate requiring confirmation.
+- Keyboard MCU: HFD80CP100 / SN32F299 family correlation is not proof of exact firmware identity.
+- SN32F290 firmware descriptor candidate: 0C45:8801
+- Observed physical L99 keyboard: 0C45:800A
+- Identity relationship remains unresolved.
+- **Do not claim firmware compatibility.**
+
+### 37.12.6 Product objective
+**Target architecture:**
+- Stock AULA L99 Firmware
+- Version-specific OpenDeck Patch
+- Windows OpenDeck Integration
+
+**Mandatory capabilities:**
+- Arbitrary dynamic icons.
+- Independent physical touchscreen events.
+- OpenDeck actions.
+- Profile switching.
+- Reconnect restoration.
+- Original Numpad preserved.
+- Stock Home Navigation preserved.
+- Reusable firmware patching.
+- Safe recovery.
+
+**Static UI alone is not the final product.**
+
+### 37.12.7 Current blockers (recorded accurately)
+- UART RX PC to command handler mapping incomplete.
+- LCD writer PC to renderer mapping incomplete.
+- Command buffer to image buffer dataflow incomplete.
+- Runtime arbitrary image upload unverified.
+- Runtime resource switching unverified.
+- MCore hook preconditions unverified.
+- Physical touch isolation unverified.
+- Firmware recovery unverified.
+
+**Physical firmware flashing: NO-GO.**
+
+### 37.12.8 Next research task
+**Task:** DI-TRACE-CORRELATE
+
+**Objective:** Correlate native runtime events with existing MCore function boundaries.
+
+**Inputs:**
+- DI-TRACE-NATIVE event JSONL.
+- DI-CORE-CALLGRAPH.
+- R5 Def-Use evidence.
+- V2.2/V2.3 native function maps.
+
+**Required outputs:**
+- UART_RX_FUNCTIONS.json
+- LCD_WRITER_FUNCTIONS.json
+- COMMAND_TO_LCD_CHAINS.json
+- EXACT_MISSING_EDGES.json
+- ACCEPTANCE.json
+
+**Constraints:**
+- Do not repeat CEmu Page Navigation research.
+- Do not repeat generic function inventory.
+- Do not mark dynamic icon PASS without actual runtime image update evidence.
+
 ## 38. AFRE Wave 2 research checkpoint documentation
 
 ### 38.1 Git baseline

@@ -1,6 +1,6 @@
 
 
-### Current product direction (2026-11-22 checkpoint)
+### Current product direction (2026-11-24 checkpoint)
 
 The target is a **real Stream Deck-style AULA L99**, not a numpad key remapper: a Windows visual editor defines icons, button geometry, actions, profiles, and feedback; the L99 displays custom UI/NAND resources and returns device-specific touch events; Windows updates state/variables and integrates with Companion, Macro Deck, or another open-source macro engine.
 
@@ -12,9 +12,13 @@ The target is a **real Stream Deck-style AULA L99**, not a numpad key remapper: 
 
 **OpenDeck live integration (2026-11-23 checkpoint):** PASS_VERIFIED_LIVE_WINDOWS for OD1-R2 (AULA L99 4x4 virtual device registered; Rust Named Pipe IPC works; touch 0x50 triggered a real OpenDeck action; Google Open URL action executed) and OD1-R3-H1 (genuine OpenDeck setImage callbacks received; JPEG source identified; JPEG decoded and normalized to PNG; callback count increased 3 to 8; normalized PNG SHA-256 changed after icon change; Rust release build passed; existing touch IPC preserved). OD2-B-R2 PASS_VERIFIED_LIVE_WINDOWS_TO_MOCK (genuine Rust callback events; local callback spool verified; Python CallbackSpoolConsumer processed 30 CLEAR_POSITION and 2 SET_IMAGE events; PNG converted to RGB565 little-endian, 19,200 bytes per 80x120 image; RGB565 SHA-256 4054fd8bf8d20d967ac923cd940056a4e90e2b096ea93e54cbea6d4acafedef4; MockTransport received one image update; duplicate suppression worked). MockTransport PASS does NOT mean physical L99 screen output is verified.
 
-**Pending OpenDeck tasks:** OD2-A-R1 Real Named Pipe Input Adapter integration; HW2 physical touchscreen transport testing; physical L99 icon/framebuffer delivery unverified.
+**Pending OpenDeck tasks:** OD2-A-R1 Real Named Pipe Input Adapter integration; HW2 physical touchscreen transport testing; physical L99 icon/framebuffer delivery unverified. DI-D1: 21/21 offline tests PASS; live integration pending. Physical dynamic icon output unverified. Physical touchscreen input unverified. Original physical Numpad functionality must be preserved.
 
-**Next workstreams:** (1) UI/NAND builder and emulator-only custom layout validation, (2) dedicated L99 touch transport, (3) variable-driven icon/text feedback, (4) Windows editor/macro integration, (5) controlled UI-only deployment/recovery validation, (6) OD2-A-R1 Named Pipe Input Adapter integration, (7) HW2 physical touchscreen transport testing. Physical custom firmware/UI flashing remains NO-GO pending an explicit evidence-gated decision.
+**Native runtime instrumentation (2026-11-24 checkpoint):** DI-TRACE-NATIVE PASS_NATIVE_EVENT_CAPTURE. Process-isolated CEmu execution on HFD_Code_V2.2.bin (305800 bytes, SHA-256 432e358cac96fb930ab680ada6f953c9005027c58b31b7ee3bb6bc7868ef35cf). Page 1 and Page 21 opened. 128173 sampled instruction events. Event counts: 30 UART RX, 356 LCD command, 2100 sampled LCD pixel writes, 20 UART TX, 81798 NAND events. Both child processes exited successfully. No physical hardware writes. Evidence limitations: sampled events do not prove complete instruction coverage. UART RX and LCD writer PCs recorded but complete UART command → renderer → LCD dataflow not established.
+
+**MCORE research preserved:** HFD V2.2/V2.3 firmware identities, MCore Ghidra native analysis, function maps, High P-code evidence, instruction-level call graph, MCORE-CALL-GATE, MCORE-LIFT-FIX, DI-DATAFLOW-CLOSURE, DI-R2 bounded SSA analysis, DI-NATIVE-CLOSURE. Semantic closure not claimed.
+
+**Next workstreams:** (1) UI/NAND builder and emulator-only custom layout validation, (2) dedicated L99 touch transport, (3) variable-driven icon/text feedback, (4) Windows editor/macro integration, (5) controlled UI-only deployment/recovery validation, (6) OD2-A-R1 Named Pipe Input Adapter integration, (7) HW2 physical touchscreen transport testing, (8) DI-TRACE-CORRELATE — correlate native runtime event PCs with MCore function boundaries. Physical custom firmware/UI flashing remains NO-GO pending an explicit evidence-gated decision.
 
 Research outputs suitable for version control belong under `u76/s1`, `u76/s2`, etc., in this repository; vendor binaries, large captures, temporary emulator images, and Ghidra caches stay local/ignored. See the latest checkpoint in `docs/PROJECT_HANDOVER.md`.
 # AULA L99 Touchscreen Reverse Engineering and Stream Deck Bridge
