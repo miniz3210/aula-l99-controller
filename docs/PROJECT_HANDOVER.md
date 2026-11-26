@@ -3568,3 +3568,198 @@ Do not use V2.2 addresses directly in this project.
 - Dynamic icon baseline: DI-PATCH-A-FINAL CEmu 14/14; A2-R2 agent-reported CEmu live closure; DI-D1 geometry/banding 4x4. Patch Engine P1 agent-reported 32/32 offline with exact golden SHA `df3a998b0c8cf7689610bc2dae63f4081a660e3d6b0b927f2dd3f92acb6310fe`, 16 patch operations and 327 actual changed bytes (historical 356-byte footprint is a different measure).
 - PATCH-SAFE-T1/T2: 149/149 bounded CFG instructions and modeled stack balance pass; full patch safety PARTIAL. FW-SAFE-C R4-R9 evidence closure complete. Independent bad-app recovery BLOCKED, interrupted-update recovery UNVERIFIED, physical flashing NO-GO.
 - Next engineering task: use the verified relative-mouse and virtual-Numpad HID report evidence to determine an independent absolute touch event route without mouse side effects. Do not repeat USB inventory, generic firmware RE, or completed capture analysis.
+
+## REA Execution and Transfer Contract (2026-11-25)
+
+This section is mandatory for all future AULA L99 REA work. Keep code, scripts, comments, and agent prompts in English.
+
+### Environments
+- Windows repository: `C:\temp\aula-l99-controller`
+- REA SSH: `reauser@10.1.0.107`
+- PuTTY PPK key: `$env:USERPROFILE\.ssh\aula-rea.ppk`
+- REA work root: `/home/reauser/rea-lab/work/`
+- Use `plink.exe` for SSH and `pscp.exe` for file transfer, both with `-batch -i $reaKey`. Never assume OpenSSH can read a PPK file.
+- Check SSH before any work. Do not print private key contents.
+
+### Small REA tasks
+- Windows coding agent runs bounded read-only work directly through `plink.exe` using the PPK path above.
+- Use existing evidence and scripts; do not repeat completed RE or generate a ZIP for a short check.
+- Never touch the physical USB/COM/HID, run updater tools, enter bootloader, or flash.
+
+### Large or unattended REA tasks
+- Provide a complete ZIP package with `start.sh`, `status.sh`, a worker, and a README. Include a real deterministic experiment, not merely an inventory or keyword scan.
+- Every package must write all results to its own `output/` folder, including `state.json`, `report.md`, `run.log`, and experiment-specific evidence. `state.json` must distinguish execution success from research success.
+- Do not modify original firmware, NAND, UI, or emulator artifacts. Use copies for experiments.
+- Required user-facing delivery has TWO separate PowerShell command blocks: (1) transfer ZIP to REA using `pscp.exe` and PPK, (2) extract/start/status via `plink.exe` and PPK. Also give a separate status-only command.
+- REA package layout: `/home/reauser/rea-lab/work/<package_name>/`, archive in `/home/reauser/rea-lab/work/<archive_name>.zip`.
+- Inside REA, follow the standard pattern: `mkdir -p`, `cd`, `unzip -o ../<archive>.zip`, `bash start.sh`, `bash status.sh`.
+- Do not claim PASS_CEMU unless actual emulator runtime evidence exists; never treat CEmu as physical proof.
+
+### PowerShell transfer template (run on Windows)
+```powershell
+$reaHost = 'reauser@10.1.0.107'
+$reaKey = "$env:USERPROFILE\.ssh\aula-rea.ppk"
+$zip = 'C:\temp\PACKAGE_NAME.zip'
+if (-not (Test-Path -LiteralPath $reaKey)) { throw 'PPK key missing' }
+if (-not (Test-Path -LiteralPath $zip)) { throw 'ZIP missing' }
+& plink.exe -batch -i $reaKey $reaHost 'hostname'
+if ($LASTEXITCODE -ne 0) { throw 'SSH failed' }
+& pscp.exe -batch -i $reaKey $zip "${reaHost}:/home/reauser/rea-lab/work/"
+if ($LASTEXITCODE -ne 0) { throw 'Transfer failed' }
+```
+
+### PowerShell execution template (run on Windows, after transfer)
+```powershell
+$reaHost = 'reauser@10.1.0.107'
+$reaKey = "$env:USERPROFILE\.ssh\aula-rea.ppk"
+$remote = 'mkdir -p /home/reauser/rea-lab/work/PACKAGE_DIR && cd /home/reauser/rea-lab/work/PACKAGE_DIR && unzip -o ../PACKAGE_NAME.zip && bash start.sh && bash status.sh'
+& plink.exe -batch -i $reaKey $reaHost $remote
+if ($LASTEXITCODE -ne 0) { throw 'REA start failed' }
+```
+
+### PowerShell status-only template
+```powershell
+$reaHost = 'reauser@10.1.0.107'
+$reaKey = "$env:USERPROFILE\.ssh\aula-rea.ppk"
+& plink.exe -batch -i $reaKey $reaHost 'cd /home/reauser/rea-lab/work/PACKAGE_DIR && bash status.sh'
+```
+
+### Safety and completion
+- Physical flash: NO-GO until explicit new authorization and recovery gates are satisfied.
+- Do not use generic file counts, test harness exit status, or emulator-only data as physical evidence.
+- No git commit, tag, push, or broad `git add .` unless explicitly requested.
+
+## 2026-11-25: Mandatory agent execution and reasoning guardrails
+
+### Incident and evidence
+- Multiple MCore/IRQ62 agent sessions exceeded their intended token budgets, reached model output limits, and sometimes delivered no files. A screenshot showed repeated speculative reasoning about carry/branch semantics around `0x6003D2F0` and `0x6003D2F2` without a new tool result.
+- Model internal reasoning can consume generation/output budget depending on the provider and client. Session cumulative token and cache counters are **not** proof of a single-call context overflow. Increasing max output to 32K/65K is not the default remedy.
+- Prompt-only token ceilings are not enforceable runtime limits. Configure actual limits in the agent client when supported.
+
+### Non-negotiable rules for future AULA L99 tasks
+1. Keep one bounded, measurable engineering question per task; define exact input identity, observable result, PASS/BLOCKED criteria, timeout, and deliverable paths before execution.
+2. **Never manually simulate more than 10 assembly instructions in model reasoning.** For MCore registers, carry, branch, memory and instruction behavior, use deterministic Python, native disassembly, or actual CEmu trace. Do not guess instruction semantics.
+3. Never repeat an unchanged hypothesis without new evidence. Maximum two materially different attempts per unresolved question; then mark BLOCKED/UNVERIFIED, write evidence, and stop.
+4. Do not invent paths, APIs, CLI flags, RAM addresses, emulator entry points, or device behavior. Check exact documented paths and supported interfaces. No repository-wide searches.
+5. Cap command output at 40 lines; prefer targeted inspection. Run bounded scripts locally on REA unattended rather than having an AI agent reason over long CPU traces.
+6. Write real, nonempty output artifacts after each milestone; validate JSON and file paths. A process exit code or completed report is not a research, emulator, or physical hardware PASS.
+7. Separate evidence levels: user-reported, source/reference implementation, verified static, offline/mock, live CEmu, and physical device. Do not promote one level into another.
+8. If reasoning becomes repetitive or a session approaches its runtime ceiling, stop, preserve existing files, write a short handover with current verified facts and blockers, and start a fresh session. Do not restart completed research.
+9. Prefer Low/Medium reasoning for bounded implementation tasks. Target roughly 5K-10K tokens; use a real client-enforced 15K-20K session ceiling where possible. Do not blindly raise max output tokens to prolong a loop.
+10. Do not commit, tag, push, reset, or clean Git unless the user explicitly requests the action. No physical firmware flashing while safety gates remain NO-GO.
+
+### Work allocation and fixed environment
+- REA: native executable/firmware research, deterministic instruction and trace experiments, bounded unattended packages.
+- Windows agent: focused coding, OpenDeck integration, deterministic tests, capture analysis and documentation.
+- Windows repo: `C:\temp\aula-l99-controller`; PowerShell 5.1. REA: `reauser@10.1.0.107`. PuTTY private key: `C:\Users\Man\.ssh\aula-rea.ppk`.
+- Preserve 4x4/16-button first-version baseline; 4x5/20 is future HOLD. Physical flash remains NO-GO.
+
+### Immediate handover context
+- `0x6003D2EC`..`0x6003D2F4` is a static MCore zero-fill-loop candidate; PC stop before `0x6003D2F0` is not branch execution proof. Use the existing Ghidra instruction evidence and `LOOP-ZEROFILL-CLOSURE` output before any new experiment.
+- IRQ62 vector mapping is static evidence; natural handler entry and GT911 touch-specific identity remain unverified. Do not infer infinite loop, HALT, IRQ disabled, or touch-init failure from sampled PC or zero counters alone.
+- Firmware/legacy UI SHA-256 must be checked against the intended experiment before running; do not silently substitute the official UI for the legacy 127MB CEmu baseline.
+
+## Canonical Manifest P2-C Reconciliation (2026-11-26)
+
+Status: P2_C_INVENTORY_RECONCILED (inventory consistency only). Canonical artifact approval remains REVIEW_REQUIRED. No artifact was moved, deleted, renamed, or flashed.
+
+### Snapshot reconciliation
+- P1 inventory: 17,373 records (Windows 8,238; REA 9,135).
+- V2 inventory: 17,355 records (documented Windows 8,220; REA 9,135).
+- Path comparison: 21 P1-only records and 3 V2-only records; net 18 fewer in V2.
+- P1-only records include touch research scripts/reports and canonical automation outputs; V2-only records are three evbunpack x86 packer test executables.
+- The two duplicate SHA-256 hash *sets* were compared and found identical. Previously reported duplicate-group counts (P1 2,449; V2 2,450) are inconsistent with this comparison and must not be repeated as a verified increase. Membership and calculation methods have not been independently audited.
+- Snapshot path differences are located, but their exact creation/filtering chronology is not established.
+
+### Existing artifacts (do not regenerate)
+- P1: C:\temp\aula-canonical-manifest-p1\output\CANONICAL_ARTIFACT_MANIFEST.json
+- V2: C:\temp\aula-l99-controller\local_analysis\automation\CANONICAL_ARTIFACT_MANIFEST_V2.json
+- Dependency map: C:\temp\aula-l99-controller\local_analysis\automation\DEPENDENCY_MAP.json
+- Canonical path map: C:\temp\aula-l99-controller\docs\automation\CANONICAL_PATH_MAP.md
+- REA environment: C:\temp\aula-l99-controller\docs\automation\REA_ENVIRONMENT.json
+- Correction report: C:\temp\aula-l99-controller\docs\automation\CANONICAL_P2_CORRECTION_REPORT.md
+
+### Evidence and safety
+- Stock HFD V2.2 SHA-256: 432e358cac96fb930ab680ada6f953c9005027c58b31b7ee3bb6bc7868ef35cf.
+- Official 95 MB UI SHA-256: 903a4fbad5ed1f6165d8b4491ef967fb2c88e375c6a416b21476cdb20a99d76d.
+- DI-E2E-R2 OpenDeck spool-to-CEmu LCD, page restore, and reconnect: PASS_CEMU per existing acceptance reports; not physical verification.
+- Touch Queue: PASS_OFFLINE; natural touch handler/IRQ dispatch remains unverified.
+- Physical touch transport: pending HW2 read-only physical capture.
+- Firmware recovery: BLOCKED; physical flash: NO-GO.
+- Preserve the 4x4/16-button baseline. Do not implement 4x5/20 buttons yet.
+
+### REA operating contract
+- Small REA work: Windows agent via plink.exe and PPK at $env:USERPROFILE\.ssh\aula-rea.ppk to reauser@10.1.0.107.
+- Large unattended work: provide ZIP plus two separate Windows PowerShell blocks (pscp.exe transfer, then plink.exe extract/start) and a status-only block.
+- Standard remote sequence: mkdir -p, cd, unzip -o ../PACKAGE.zip, bash start.sh; later bash status.sh.
+- Each REA package writes output/state.json, output/report.md, output/run.log and actual experiment evidence under its own output/ directory. Distinguish execution PASS from research PASS.
+- No original firmware/NAND modifications, physical COM/HID/USB access, updater execution, bootloader experiment, flash, or git commit/tag/push without explicit authorization.
+
+### Next project milestone
+1. Close the canonical inventory reconciliation workstream. Do not rescan or regenerate P1/P2/V2 without a specific evidence gap.
+2. Resume the existing touch-ready/IRQ62 runtime investigation using existing isolated CEmu runner and official UI, with identity checks and exact-PC runtime evidence. Avoid further inventory-only packages.
+3. Perform HW2 read-only physical touch capture when the device and an operator are available. Keep emulator, offline, and physical evidence separate.
+4. Do not start combined firmware deployment or physical flash while recovery gates remain unresolved.
+
+## Mandatory Canonical Preflight and Evidence Provenance Gate (2026-11-26)
+
+**Mandatory for every future AULA L99 agent, REA, emulator, firmware, USB-capture, and OpenDeck task.** This is a preflight and acceptance contract, not an assertion that every candidate in the canonical manifest is approved. Do not repeat completed work in handover section 15 or later verified checkpoints.
+
+### Gate G0: Existing work and current task ownership
+1. Read the latest `docs/PROJECT_HANDOVER.md`, relevant current reports, and the do-not-repeat list before work.
+2. Check whether the exact task or experiment has already completed. Reuse existing outputs; do not rerun a successful experiment just to increase confidence.
+3. Record the exact new evidence gap and the current task's bounded acceptance criteria.
+4. For parallel agents, define non-overlapping output ownership. No git commit, tag, push, or broad `git add .` unless the user requests it.
+
+### Gate G1: Canonical artifact identity
+1. Read `docs/automation/CANONICAL_PATH_MAP.md`, `docs/automation/REA_ENVIRONMENT.json`, and `local_analysis/automation/DEPENDENCY_MAP.json`.
+2. Use `local_analysis/automation/CANONICAL_ARTIFACT_MANIFEST_V2.json` for artifact review where relevant. The V2 inventory is a different snapshot from P1; do not automatically overwrite or merge either inventory.
+3. Before reading/analyzing an artifact, record the exact absolute path, machine, size, SHA-256 (where available), role, and evidence source. Reject unexpected substitutions, even when filenames match.
+4. Canonical candidate is not automatically verified or approved. Preserve purpose-specific duplicate copies and all historical evidence. No moves/deletes without explicit authorization.
+5. Golden HFD V2.2 SHA-256: `432e358cac96fb930ab680ada6f953c9005027c58b31b7ee3bb6bc7868ef35cf` (305800 bytes).
+6. Official captured UI SHA-256: `903a4fbad5ed1f6165d8b4491ef967fb2c88e375c6a416b21476cdb20a99d76d` (95473788 bytes). Legacy 127 MB UI SHA-256: `4cb3fa5c77eea973a2b62ca61873f071692694f4c9a1832507fe2c8c9ba582b4`. Never substitute legacy or custom UI for official UI.
+7. Canonical CEmu trace library SHA-256: `79a49b71665ba5f63526b1d42d09a3c9f02dd646fe1f374cd75198f3952133f6`. Experimental CEmu modifications are not canonical.
+8. If identity is missing or mismatched, return `BLOCKED_INPUT_IDENTITY` with exact expected/actual details before performing analysis.
+
+### Gate G2: Evidence provenance and session consistency
+1. For each capture or trace, record its source path, SHA-256, size, creation/source context, capture start/end UTC, action-log provenance, and tool/version used to extract data.
+2. For USB captures, check packet timestamps against the action-log UTC windows. Verify the actual file used by each `tshark` or analysis command. A report filename or directory name alone is insufficient.
+3. USB bus/device addresses are **capture-local**. Never transfer a bus/device address or endpoint-to-device mapping from a November 24 capture to the November 26 capture without descriptor-level verification in that same capture.
+4. Device 12 attribution remains disputed. An ASUSTek VID/PID or 11-byte signed movement-like payload must not be promoted to an L99 independent absolute touch stream without capture-local descriptor and repeatable touch-specific payload evidence.
+5. Known L99 identities: keyboard HID `0C45:800A`; screen CDC `EEEF:268A`. MI_00/MI_01/MI_02/MI_03 enumeration alone does not prove independent touch events or absolute coordinates.
+6. HW2 capture target: `captures/HW2_CAPTURE_20261126_092419/usb_capture.pcapng` and the `action_log.csv` in the same directory. Verify their actual timestamps and hashes at runtime. Step 16 is contaminated: Laptop A was pressed first, then L99 physical A. Never treat the entire window as one L99 event.
+7. If input capture, timestamp, descriptor mapping, or action log conflicts, return `BLOCKED_INPUT_PROVENANCE`. Do not silently substitute another source or reuse old derived TSVs.
+8. Prior derived artifacts must carry source capture hash and command provenance. A TSV showing November 24 timestamps is not valid November 26 evidence unless traced to the same primary capture.
+
+### Gate G3: Prior findings and prohibited inference upgrades
+1. Dynamic icon and OpenDeck-to-CEmu pipeline, page restore, reconnect: `PASS_CEMU` only. Physical display remains unverified.
+2. Touch queue and transport-independent adapter: `PASS_OFFLINE` only until linked to an independently attributed physical input stream.
+3. Natural IRQ62 dispatch and qualified touch hook: `UNVERIFIED`; direct calls and static vector mapping are not natural runtime dispatch.
+4. RAM structure `0x00820194` is classified as initialization structure, not verified runtime touch X/Y. Do not repeat this false candidate.
+5. Physical HW2 capture is primary physical USB evidence; temporal correlation alone does not establish touch coordinates or independent transport.
+6. Label each finding as `[CAPTURE]`, `[EMU]`, `[STATIC]`, `[OFFLINE]`, `[USER-REPORTED]`, `[INFERRED]`, `[UNVERIFIED]`, or `[BLOCKED]`. Never upgrade one evidence class into another.
+
+### Gate G4: Acceptance, resource limits, and outputs
+1. Define what constitutes research success before running. Script execution, test counts, inventory counts, or file creation are not research success.
+2. Every conclusion must reference exact source files and bounded evidence such as frame numbers, timestamps, payload offsets, MCore PC addresses, and runtime stop codes as appropriate.
+3. Prefer deterministic analysis on Ubuntu REA. Use ordinary/free Windows agents for coding, scripts, PCAP analysis, documentation, and orchestration; reserve expensive reasoning models for difficult native MCore/bootloader questions.
+4. For small REA tasks, Windows agent uses `plink.exe -batch -i "$env:USERPROFILE\.ssh\aula-rea.ppk"` to `reauser@10.1.0.107`. For long unattended work, provide ZIP, `pscp.exe` transfer, `plink.exe` extraction/start, `bash status.sh`, and an `output/` folder with `state.json`, `report.md`, `run.log`, and genuine experiment evidence. Do not disrupt interactive SSH sessions.
+5. Stop on a concrete blocker; preserve partial evidence and report exact missing facts. Do not automatically spawn another R2/R3 or inventory-only package.
+6. Physical firmware flash is **NO-GO**. No updater execution, bootloader experiment, original firmware/NAND/UI modification, or physical COM/HID/USB actions without a separately authorized task. Preserve the 4x4/16-button product baseline; 4x5/20 is HOLD.
+
+### Mandatory preflight record in every future task report
+- `task_id`, `source_handover`, `canonical_config_paths`, `input_artifacts` (path, SHA-256, size, role), `source_session_utc`, `prior_findings_reused`, `known_hazards`, `acceptance_criteria`, `evidence_classification`, `decision`, `remaining_blockers`.
+- If any mandatory identity or provenance check fails, state `BLOCKED_INPUT_IDENTITY` or `BLOCKED_INPUT_PROVENANCE` explicitly. Never report PASS on an incomplete gate.
+
+## GT911-NATIVE-CONSOLIDATED-R3 | 2026-11-26
+
+- **Emulator milestone:** `HANDLER_ENTRY_OBSERVED_CEMU` (isolated stock HFD V2.2 / official captured UI / canonical trace library). Evidence source: `/home/reauser/rea-lab/work/aula_gt911_native_consolidated_r3/output/`.
+- Controlled idle: IRQ62=0, GT911 reads=0, no handler stop; final PC `0x60041D28`.
+- Touch `(100,200)` and `(200,100)`: IRQ62=1 and exact pre-instruction stop at `0x6003FFD8` in both runs; GT911 reads=0. This confirms handler-entry correlation in CEmu, **not** handler execution, coordinate consumption or UI event dispatch.
+- Exact stock V2.2 SHA-256: `432e358cac96fb930ab680ada6f953c9005027c58b31b7ee3bb6bc7868ef35cf`.
+- Official captured UI SHA-256: `903a4fbad5ed1f6165d8b4491ef967fb2c88e375c6a416b21476cdb20a99d76d`.
+- Canonical CEmu trace library SHA-256: `79a49b71665ba5f63526b1d42d09a3c9f02dd646fe1f374cd75198f3952133f6`.
+- A separate modified library was present in checkpoint inventory (`31f7f4840fd76ec9c5f661ed5a9a3fbe444bc1a25989b6b8f3591e5ca4b56c0d`). Runtime case library provenance should be checked against the actual runner before any stronger conclusion.
+- **Unresolved:** GT911 register reads, X/Y and DOWN/UP state, button/page dispatch, firmware queue producer, and physical Touch-to-OpenDeck. Stop-PC occurs before the first handler instruction executes.
+- **Next bounded task:** GT911-HANDLER-CONTINUATION-R1, isolated CEmu only; resume from handler entry and record register reads and coordinate-dependent RAM/event changes. Do not repeat vector/zero-fill analysis.
+- Dynamic icon pipeline remains `PASS_CEMU`; TOUCH-P1 remains `PASS_OFFLINE`; physical flash remains **NO-GO**. First version is 4x4 / 16 buttons; 4x5 / 20 buttons remains future HOLD.

@@ -732,3 +732,16 @@ Do not state: the user's unit physically contains HFD168BDP; HFD168BDP is defini
 - Dynamic icon baseline: DI-PATCH-A-FINAL CEmu 14/14; A2-R2 agent-reported CEmu live closure; DI-D1 geometry/banding 4x4. Patch Engine P1 agent-reported 32/32 offline with exact golden SHA `df3a998b0c8cf7689610bc2dae63f4081a660e3d6b0b927f2dd3f92acb6310fe`, 16 patch operations and 327 actual changed bytes (historical 356-byte footprint is a different measure).
 - PATCH-SAFE-T1/T2: 149/149 bounded CFG instructions and modeled stack balance pass; full patch safety PARTIAL. FW-SAFE-C R4-R9 evidence closure complete. Independent bad-app recovery BLOCKED, interrupted-update recovery UNVERIFIED, physical flashing NO-GO.
 - Next engineering task: use the verified relative-mouse and virtual-Numpad HID report evidence to determine an independent absolute touch event route without mouse side effects. Do not repeat USB inventory, generic firmware RE, or completed capture analysis.
+
+## GT911-NATIVE-CONSOLIDATED-R3 | 2026-11-26
+
+- **Emulator milestone:** `HANDLER_ENTRY_OBSERVED_CEMU` (isolated stock HFD V2.2 / official captured UI / canonical trace library). Evidence source: `/home/reauser/rea-lab/work/aula_gt911_native_consolidated_r3/output/`.
+- Controlled idle: IRQ62=0, GT911 reads=0, no handler stop; final PC `0x60041D28`.
+- Touch `(100,200)` and `(200,100)`: IRQ62=1 and exact pre-instruction stop at `0x6003FFD8` in both runs; GT911 reads=0. This confirms handler-entry correlation in CEmu, **not** handler execution, coordinate consumption or UI event dispatch.
+- Exact stock V2.2 SHA-256: `432e358cac96fb930ab680ada6f953c9005027c58b31b7ee3bb6bc7868ef35cf`.
+- Official captured UI SHA-256: `903a4fbad5ed1f6165d8b4491ef967fb2c88e375c6a416b21476cdb20a99d76d`.
+- Canonical CEmu trace library SHA-256: `79a49b71665ba5f63526b1d42d09a3c9f02dd646fe1f374cd75198f3952133f6`.
+- A separate modified library was present in checkpoint inventory (`31f7f4840fd76ec9c5f661ed5a9a3fbe444bc1a25989b6b8f3591e5ca4b56c0d`). Runtime case library provenance should be checked against the actual runner before any stronger conclusion.
+- **Unresolved:** GT911 register reads, X/Y and DOWN/UP state, button/page dispatch, firmware queue producer, and physical Touch-to-OpenDeck. Stop-PC occurs before the first handler instruction executes.
+- **Next bounded task:** GT911-HANDLER-CONTINUATION-R1, isolated CEmu only; resume from handler entry and record register reads and coordinate-dependent RAM/event changes. Do not repeat vector/zero-fill analysis.
+- Dynamic icon pipeline remains `PASS_CEMU`; TOUCH-P1 remains `PASS_OFFLINE`; physical flash remains **NO-GO**. First version is 4x4 / 16 buttons; 4x5 / 20 buttons remains future HOLD.
